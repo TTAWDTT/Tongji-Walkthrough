@@ -1,21 +1,55 @@
 import { useState } from "react";
-import { Link } from "@heroui/react";
+import { Link, Tooltip } from "@heroui/react";
 import clsx from "clsx";
 
 import { siteConfig } from "@/config/site";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { GithubIcon, Logo } from "@/components/icons";
+import { GithubIcon, WechatIcon } from "@/components/icons";
 import { SmoothLink } from "@/components/smooth-link";
+
+function WechatGroupTooltip({ basePath }: { basePath: string }) {
+  return (
+    <Tooltip.Root closeDelay={120} delay={120}>
+      <Tooltip.Trigger
+        aria-label="Show WeChat group QR code"
+        className="icon-link"
+      >
+        <WechatIcon className="text-[#07C160]" />
+      </Tooltip.Trigger>
+      <Tooltip.Content
+        showArrow
+        className="wechat-tooltip-content"
+        offset={10}
+        placement="bottom end"
+      >
+        <img
+          alt="Tongji Walkthrough WeChat group QR code"
+          className="h-auto w-64 rounded-md"
+          height={973}
+          src={`${basePath}/brand/wechat-group.jpg`}
+          width={717}
+        />
+      </Tooltip.Content>
+    </Tooltip.Root>
+  );
+}
 
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-separator bg-background/95 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_5%,transparent)] backdrop-blur-lg">
       <header className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-4">
           <SmoothLink className="brand-link flex items-center gap-1" href="/">
-            <Logo />
+            <img
+              alt=""
+              className="h-9 w-9 object-contain"
+              height={36}
+              src={`${basePath}/brand/site-logo.png`}
+              width={36}
+            />
             <p className="font-bold text-inherit">Tongji Walkthrough</p>
           </SmoothLink>
           <ul className="hidden lg:flex gap-4 ml-2">
@@ -35,7 +69,8 @@ export const Navbar = () => {
           </ul>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-1">
+          <WechatGroupTooltip basePath={basePath} />
           <Link
             aria-label="Github"
             className="icon-link"
@@ -45,10 +80,11 @@ export const Navbar = () => {
           >
             <GithubIcon className="text-muted" />
           </Link>
-          <ThemeSwitch />
+          <ThemeSwitch className="icon-link" />
         </div>
 
-        <div className="flex sm:hidden items-center gap-2">
+        <div className="flex sm:hidden items-center gap-1">
+          <WechatGroupTooltip basePath={basePath} />
           <Link
             aria-label="Github"
             className="icon-link"
@@ -58,7 +94,7 @@ export const Navbar = () => {
           >
             <GithubIcon className="text-muted" />
           </Link>
-          <ThemeSwitch />
+          <ThemeSwitch className="icon-link" />
           <button
             aria-expanded={isMenuOpen}
             aria-label="Toggle menu"

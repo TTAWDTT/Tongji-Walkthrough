@@ -22,7 +22,9 @@ export const ThemeSwitch: FC<ThemeSwitchProps> = ({ className }) => {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) return <div aria-hidden className="w-6 h-6" />;
+  if (!isMounted) {
+    return <div aria-hidden className={clsx("w-10 h-10", className)} />;
+  }
 
   return (
     <button

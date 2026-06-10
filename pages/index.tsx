@@ -23,9 +23,11 @@ const maintainers = [
 ];
 
 export default function IndexPage() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
   return (
     <DefaultLayout>
-      <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-12">
+      <section className="flex flex-col items-center justify-center gap-4 py-0 md:py-0">
         <div className="inline-block max-w-xl text-center justify-center">
           <span className={title()}>Tongji&nbsp;</span>
           <span className={title({ color: "blue" })}>Walkthrough&nbsp;</span>
@@ -33,9 +35,7 @@ export default function IndexPage() {
           <span className={title()}>
             for study, campus, and everyday orientation.
           </span>
-          <div className={subtitle({ class: "mt-4" })}>
-            A quiet, structured guide that grows from Markdown notes.
-          </div>
+          <div className={subtitle({ class: "mt-4" })}>愿同济的荣光永护您</div>
         </div>
 
         <div className="flex gap-3">
@@ -81,12 +81,14 @@ export default function IndexPage() {
           </div>
         </div>
 
-        <div className="mt-8 max-w-2xl text-center text-muted leading-8">
-          Edit Markdown files in{" "}
-          <code className="rounded-sm bg-accent/20 px-2 py-1 font-mono text-sm text-accent">
-            content/docs
-          </code>{" "}
-          and the Docs page will rebuild its sidebar automatically.
+        <div className="mt-4 max-w-2xl text-center text-muted leading-8">
+          <img
+            alt="Tongji University"
+            className="mx-auto h-auto w-20 md:w-40"
+            height={224}
+            src={`${basePath}/brand/site-logo.png`}
+            width={224}
+          />
         </div>
       </section>
     </DefaultLayout>

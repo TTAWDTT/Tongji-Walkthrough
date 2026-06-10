@@ -17,7 +17,12 @@ export const Head = () => {
         content="viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
         name="viewport"
       />
-      <link href={`${basePath}/favicon.ico`} rel="icon" />
+      <link
+        href={`${basePath}/brand/site-logo.png`}
+        rel="icon"
+        type="image/png"
+      />
+      <link href={`${basePath}/brand/site-logo.png`} rel="apple-touch-icon" />
     </NextHead>
   );
 };
