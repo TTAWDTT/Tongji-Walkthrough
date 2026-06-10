@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const repoName = "Tongji-Walkthrough";
 const isGithubPages = process.env.GITHUB_PAGES === "true";
-const basePath = isGithubPages ? `/${repoName}` : "";
+const hasCustomDomain = process.env.GITHUB_PAGES_CUSTOM_DOMAIN === "true";
+const basePath = isGithubPages && !hasCustomDomain ? `/${repoName}` : "";
 
 const nextConfig = {
   reactStrictMode: true,
