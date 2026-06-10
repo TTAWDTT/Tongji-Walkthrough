@@ -7,7 +7,7 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { GithubIcon, WechatIcon } from "@/components/icons";
 import { SmoothLink } from "@/components/smooth-link";
 
-function WechatGroupTooltip({ basePath }: { basePath: string }) {
+export function WechatGroupTooltip({ basePath }: { basePath: string }) {
   return (
     <Tooltip.Root closeDelay={120} delay={120}>
       <Tooltip.Trigger
@@ -34,6 +34,45 @@ function WechatGroupTooltip({ basePath }: { basePath: string }) {
   );
 }
 
+export function NavbarBrand({ basePath }: { basePath: string }) {
+  return (
+    <SmoothLink className="brand-link inline-flex items-center gap-1" href="/">
+      <img
+        alt=""
+        className="h-9 w-9 object-contain"
+        height={36}
+        src={`${basePath}/brand/site-logo.png`}
+        width={36}
+      />
+      <p className="font-bold text-inherit">Tongji Walkthrough</p>
+    </SmoothLink>
+  );
+}
+
+export function NavbarActions({
+  basePath,
+  className,
+}: {
+  basePath: string;
+  className?: string;
+}) {
+  return (
+    <div className={clsx("items-center gap-1", className)}>
+      <WechatGroupTooltip basePath={basePath} />
+      <Link
+        aria-label="Github"
+        className="icon-link"
+        href={siteConfig.links.github}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        <GithubIcon className="text-muted" />
+      </Link>
+      <ThemeSwitch className="icon-link" />
+    </div>
+  );
+}
+
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -42,16 +81,7 @@ export const Navbar = () => {
     <nav className="sticky top-0 z-50 w-full border-b border-separator bg-background/95 shadow-[0_1px_0_color-mix(in_oklch,var(--foreground)_5%,transparent)] backdrop-blur-lg">
       <header className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-4">
-          <SmoothLink className="brand-link flex items-center gap-1" href="/">
-            <img
-              alt=""
-              className="h-9 w-9 object-contain"
-              height={36}
-              src={`${basePath}/brand/site-logo.png`}
-              width={36}
-            />
-            <p className="font-bold text-inherit">Tongji Walkthrough</p>
-          </SmoothLink>
+          <NavbarBrand basePath={basePath} />
           <ul className="hidden lg:flex gap-4 ml-2">
             {siteConfig.navItems.map((item) => (
               <li key={item.href}>
@@ -69,32 +99,10 @@ export const Navbar = () => {
           </ul>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1">
-          <WechatGroupTooltip basePath={basePath} />
-          <Link
-            aria-label="Github"
-            className="icon-link"
-            href={siteConfig.links.github}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <GithubIcon className="text-muted" />
-          </Link>
-          <ThemeSwitch className="icon-link" />
-        </div>
+        <NavbarActions basePath={basePath} className="hidden sm:flex" />
 
         <div className="flex sm:hidden items-center gap-1">
-          <WechatGroupTooltip basePath={basePath} />
-          <Link
-            aria-label="Github"
-            className="icon-link"
-            href={siteConfig.links.github}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <GithubIcon className="text-muted" />
-          </Link>
-          <ThemeSwitch className="icon-link" />
+          <NavbarActions basePath={basePath} className="flex" />
           <button
             aria-expanded={isMenuOpen}
             aria-label="Toggle menu"

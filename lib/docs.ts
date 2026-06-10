@@ -16,6 +16,11 @@ export type DocPageData = DocNavItem & {
   navItems: DocNavItem[];
 };
 
+export type DocSourceItem = DocNavItem & {
+  content: string;
+  description?: string;
+};
+
 const docsDirectory = path.join(process.cwd(), "content", "docs");
 
 const getMarkdownFiles = (directory: string): string[] => {
@@ -99,6 +104,16 @@ export const getAllDocs = () =>
   getMarkdownFiles(docsDirectory)
     .map(readDocMeta)
     .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+
+export const getAllDocSources = (): DocSourceItem[] =>
+  getAllDocs().map(({ title, slug, href, order, description, body }) => ({
+    title,
+    slug,
+    href,
+    order,
+    description,
+    content: body,
+  }));
 
 export const getDocPaths = () =>
   getAllDocs().map((doc) => ({

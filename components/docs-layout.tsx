@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { Button } from "@heroui/react";
 
 import { SmoothLink } from "@/components/smooth-link";
+import { DocsEditEntry } from "@/components/docs-edit-entry";
 
 function SidebarToggleIcon() {
   return (
@@ -107,15 +108,20 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
       </aside>
 
       <article className="docs-content min-w-0 px-6 py-8 lg:px-10 lg:py-10">
-        <header className="border-b border-separator pb-6">
-          <h1 className="text-3xl font-medium leading-tight md:text-4xl">
-            {doc.title}
-          </h1>
-          {doc.description && (
-            <p className="mt-3 max-w-2xl text-muted leading-8">
-              {doc.description}
-            </p>
-          )}
+        <header className="flex gap-4 border-b border-separator pb-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl font-medium leading-tight md:text-4xl">
+              {doc.title}
+            </h1>
+            {doc.description && (
+              <p className="mt-3 max-w-2xl text-muted leading-8">
+                {doc.description}
+              </p>
+            )}
+          </div>
+          <div className="shrink-0">
+            <DocsEditEntry />
+          </div>
         </header>
         <div
           dangerouslySetInnerHTML={{ __html: doc.contentHtml }}
