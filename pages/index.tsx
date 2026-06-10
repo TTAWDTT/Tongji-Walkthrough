@@ -4,6 +4,24 @@ import { GithubIcon } from "@/components/icons";
 import DefaultLayout from "@/layouts/default";
 import { SmoothLink } from "@/components/smooth-link";
 
+const maintainers = [
+  {
+    name: "TTAWDTT",
+    href: "https://github.com/TTAWDTT",
+    avatar: "https://github.com/TTAWDTT.png",
+  },
+  {
+    name: "Zhengxi YU",
+    href: "https://github.com/yzxoi",
+    avatar: "https://github.com/yzxoi.png",
+  },
+  {
+    name: "Zhuang Ziyi",
+    href: "https://github.com/mathzhuang",
+    avatar: "https://github.com/mathzhuang.png",
+  },
+];
+
 export default function IndexPage() {
   return (
     <DefaultLayout>
@@ -36,6 +54,31 @@ export default function IndexPage() {
             <GithubIcon size={20} />
             GitHub
           </a>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-muted">
+          <span>Maintainer:</span>
+          <div className="flex items-center gap-2">
+            {maintainers.map((maintainer) => (
+              <a
+                key={maintainer.href}
+                aria-label={`${maintainer.name} on GitHub`}
+                className="maintainer-avatar-link"
+                href={maintainer.href}
+                rel="noopener noreferrer"
+                target="_blank"
+                title={maintainer.name}
+              >
+                <img
+                  alt=""
+                  className="h-8 w-8 rounded-full"
+                  height={32}
+                  src={maintainer.avatar}
+                  width={32}
+                />
+              </a>
+            ))}
+          </div>
         </div>
 
         <div className="mt-8 max-w-2xl text-center text-muted leading-8">

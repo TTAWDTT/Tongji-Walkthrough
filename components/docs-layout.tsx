@@ -7,14 +7,11 @@ import { Button } from "@heroui/react";
 
 import { SmoothLink } from "@/components/smooth-link";
 
-function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
+function SidebarToggleIcon() {
   return (
     <svg
       aria-hidden="true"
-      className={clsx(
-        "h-4 w-4 transition-transform duration-300 ease-out",
-        isCollapsed && "rotate-180",
-      )}
+      className="h-4 w-4"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
@@ -22,7 +19,9 @@ function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
       strokeWidth={2}
       viewBox="0 0 24 24"
     >
-      <path d="m15 18-6-6 6-6" />
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
     </svg>
   );
 }
@@ -45,17 +44,12 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
             isSidebarCollapsed && "lg:px-2",
           )}
         >
-          <div className="flex items-center justify-between gap-2 px-1 pb-2">
-            <span
-              className={clsx(
-                "overflow-hidden text-sm font-medium text-muted transition-[max-width,opacity,transform] duration-300 ease-out",
-                isSidebarCollapsed
-                  ? "lg:max-w-0 lg:translate-x-2 lg:opacity-0"
-                  : "max-w-28 opacity-100",
-              )}
-            >
-              Docs
-            </span>
+          <div
+            className={clsx(
+              "flex pb-3 transition-[justify-content] duration-300",
+              isSidebarCollapsed ? "justify-center" : "justify-end",
+            )}
+          >
             <Button
               isIconOnly
               aria-label={
@@ -63,12 +57,12 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
                   ? "Expand docs sidebar"
                   : "Collapse docs sidebar"
               }
-              className="shrink-0"
+              className="docs-sidebar-toggle shrink-0"
               size="sm"
               variant="tertiary"
               onPress={() => setIsSidebarCollapsed((value) => !value)}
             >
-              <SidebarToggleIcon isCollapsed={isSidebarCollapsed} />
+              <SidebarToggleIcon />
             </Button>
           </div>
 

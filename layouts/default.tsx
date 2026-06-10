@@ -31,13 +31,13 @@ export default function DefaultLayout({
       >
         <a
           className="flex items-center gap-1 text-current no-underline"
-          href="https://www.heroui.com"
+          href="https://github.com/TTAWDTT"
           rel="noopener noreferrer"
           target="_blank"
-          title="heroui.com homepage"
+          title="TTAWDTT on GitHub"
         >
-          <span className="text-muted">Powered by</span>
-          <p className="text-accent">HeroUI</p>
+          <span className="text-muted">Developed by</span>
+          <p className="text-accent">TTAWDTT</p>
         </a>
       </footer>
     </div>

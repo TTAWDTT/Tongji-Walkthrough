@@ -35,6 +35,10 @@ select {
     font-family: var(--font-lxgw-sans), system-ui, sans-serif;
 }
 
+html {
+    scroll-padding-top: 5rem;
+}
+
 ::view-transition-old(root) {
     animation: smooth-page-out 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
@@ -98,6 +102,22 @@ select {
     transform: scaleX(1);
 }
 
+.maintainer-avatar-link {
+    display: inline-flex;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+    transition:
+        box-shadow 220ms ease,
+        transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.maintainer-avatar-link:hover {
+    box-shadow:
+        0 0 0 2px color-mix(in oklch, var(--accent) 45%, transparent),
+        0 10px 24px color-mix(in oklch, var(--foreground) 12%, transparent);
+    transform: translateY(-2px);
+}
+
 .docs-shell {
     transition: grid-template-columns 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -109,6 +129,17 @@ select {
         background 300ms ease,
         border-color 300ms ease,
         box-shadow 300ms ease;
+}
+
+.docs-sidebar-shell {
+    z-index: 30;
+}
+
+.docs-sidebar-toggle {
+    transition:
+        background 220ms ease,
+        color 220ms ease,
+        transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .docs-nav-link {
