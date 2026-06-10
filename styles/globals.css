@@ -8,14 +8,21 @@
     --font-mono: var(--font-lxgw-mono), monospace;
 }
 
-html,
-body {
+* {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
 
+*::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none;
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
     display: none;
 }
 
