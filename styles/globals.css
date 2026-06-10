@@ -26,8 +26,76 @@ body::-webkit-scrollbar {
     display: none;
 }
 
-.page-shell-enter {
-    animation: page-shell-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+html,
+body,
+button,
+input,
+textarea,
+select {
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif;
+}
+
+::view-transition-old(root) {
+    animation: smooth-page-out 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+::view-transition-new(root) {
+    animation: smooth-page-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brand-link,
+.nav-link,
+.icon-link {
+    position: relative;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    transition:
+        color 220ms ease,
+        background 220ms ease,
+        box-shadow 220ms ease,
+        transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brand-link {
+    padding: 0.375rem 0.5rem;
+}
+
+.nav-link {
+    padding: 0.375rem 0.625rem;
+}
+
+.icon-link {
+    padding: 0.5rem;
+}
+
+.brand-link:hover,
+.nav-link:hover,
+.icon-link:hover {
+    background: color-mix(in oklch, var(--foreground) 7%, transparent);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px color-mix(in oklch, var(--foreground) 8%, transparent);
+}
+
+.nav-link::after {
+    position: absolute;
+    right: 0.625rem;
+    bottom: 0.2rem;
+    left: 0.625rem;
+    height: 1px;
+    border-radius: 999px;
+    background: currentColor;
+    content: "";
+    opacity: 0;
+    transform: scaleX(0.45);
+    transition:
+        opacity 220ms ease,
+        transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link:hover::after {
+    opacity: 0.45;
+    transform: scaleX(1);
 }
 
 .docs-shell {
@@ -35,7 +103,7 @@ body::-webkit-scrollbar {
 }
 
 .docs-sidebar {
-    box-shadow: 0 1px 0 color-mix(in oklch, var(--foreground) 6%, transparent);
+    box-shadow: 1px 0 0 color-mix(in oklch, var(--foreground) 4%, transparent);
     transition:
         padding 300ms cubic-bezier(0.22, 1, 0.36, 1),
         background 300ms ease,
@@ -57,8 +125,8 @@ body::-webkit-scrollbar {
     transform: translateX(2px);
 }
 
-.docs-content-enter {
-    animation: docs-content-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.docs-content {
+    view-transition-name: docs-content;
 }
 
 .docs-markdown {
@@ -135,29 +203,27 @@ body::-webkit-scrollbar {
     padding-left: 1rem;
 }
 
-@keyframes page-shell-enter {
+@keyframes smooth-page-out {
     from {
-        opacity: 0;
-        transform: translateY(8px);
+        opacity: 1;
+        transform: translateY(0) scale(1);
     }
 
     to {
-        opacity: 1;
-        transform: translateY(0);
+        opacity: 0;
+        transform: translateY(-4px) scale(0.998);
     }
 }
 
-@keyframes docs-content-enter {
+@keyframes smooth-page-in {
     from {
         opacity: 0;
-        transform: translateY(10px);
-        filter: blur(4px);
+        transform: translateY(8px) scale(0.998);
     }
 
     to {
         opacity: 1;
         transform: translateY(0);
-        filter: blur(0);
     }
 }
 

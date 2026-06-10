@@ -4,7 +4,7 @@ import { getDocBySlug, type DocPageData } from "@/lib/docs";
 
 export default function DocsPage({ doc }: { doc: DocPageData }) {
   return (
-    <DefaultLayout>
+    <DefaultLayout fullBleed>
       <DocsLayout doc={doc} />
     </DefaultLayout>
   );

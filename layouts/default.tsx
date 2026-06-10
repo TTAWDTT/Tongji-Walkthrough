@@ -1,20 +1,34 @@
+import clsx from "clsx";
+
 import { Head } from "./head";
 
 import { Navbar } from "@/components/navbar";
 
 export default function DefaultLayout({
   children,
+  fullBleed = false,
 }: {
   children: React.ReactNode;
+  fullBleed?: boolean;
 }) {
   return (
-    <div className="relative flex flex-col h-screen">
+    <div className="relative flex min-h-screen flex-col">
       <Head />
       <Navbar />
-      <main className="container mx-auto max-w-7xl px-6 flex-grow pt-16">
+      <main
+        className={clsx(
+          "flex-grow",
+          fullBleed ? "w-full" : "container mx-auto max-w-7xl px-6 pt-16",
+        )}
+      >
         {children}
       </main>
-      <footer className="w-full flex items-center justify-center py-3">
+      <footer
+        className={clsx(
+          "w-full items-center justify-center py-3",
+          fullBleed ? "hidden" : "flex",
+        )}
+      >
         <a
           className="flex items-center gap-1 text-current no-underline"
           href="https://www.heroui.com"

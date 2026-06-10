@@ -2,6 +2,7 @@ import { siteConfig } from "@/config/site";
 import { title, subtitle } from "@/components/primitives";
 import { GithubIcon } from "@/components/icons";
 import DefaultLayout from "@/layouts/default";
+import { SmoothLink } from "@/components/smooth-link";
 
 export default function IndexPage() {
   return (
@@ -20,12 +21,12 @@ export default function IndexPage() {
         </div>
 
         <div className="flex gap-3">
-          <a
+          <SmoothLink
             className="button button--primary button--md rounded-full"
             href={siteConfig.links.docs}
           >
             Docs
-          </a>
+          </SmoothLink>
           <a
             className="button button--tertiary button--md rounded-full"
             href={siteConfig.links.github}

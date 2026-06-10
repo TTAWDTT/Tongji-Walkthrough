@@ -2,9 +2,10 @@ import type { DocPageData } from "@/lib/docs";
 import type { CSSProperties } from "react";
 
 import { useState } from "react";
-import NextLink from "next/link";
 import clsx from "clsx";
 import { Button } from "@heroui/react";
+
+import { SmoothLink } from "@/components/smooth-link";
 
 function SidebarToggleIcon({ isCollapsed }: { isCollapsed: boolean }) {
   return (
@@ -34,13 +35,13 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
 
   return (
     <section
-      className="docs-shell grid gap-8 py-8 lg:grid-cols-[var(--docs-sidebar-width)_minmax(0,1fr)] lg:py-10"
+      className="docs-shell grid min-h-[calc(100vh-4rem)] lg:grid-cols-[var(--docs-sidebar-width)_minmax(0,1fr)]"
       style={layoutStyle}
     >
-      <aside className="lg:sticky lg:top-24 lg:self-start">
+      <aside className="docs-sidebar-shell lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start">
         <div
           className={clsx(
-            "docs-sidebar rounded-lg border border-separator bg-background/65 p-2 backdrop-blur-md",
+            "docs-sidebar h-full border-r border-separator bg-background/80 p-3 backdrop-blur-md",
             isSidebarCollapsed && "lg:px-2",
           )}
         >
@@ -73,7 +74,7 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
 
           <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
             {doc.navItems.map((item, index) => (
-              <NextLink
+              <SmoothLink
                 key={item.slug}
                 aria-current={item.slug === doc.slug ? "page" : undefined}
                 className={clsx(
@@ -105,13 +106,13 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
                 >
                   {item.title}
                 </span>
-              </NextLink>
+              </SmoothLink>
             ))}
           </nav>
         </div>
       </aside>
 
-      <article key={doc.slug} className="docs-content-enter min-w-0">
+      <article className="docs-content min-w-0 px-6 py-8 lg:px-10 lg:py-10">
         <header className="border-b border-separator pb-6">
           <h1 className="text-3xl font-medium leading-tight md:text-4xl">
             {doc.title}
