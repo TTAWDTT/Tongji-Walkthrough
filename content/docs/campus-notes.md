@@ -11,6 +11,6 @@ services, study spaces, and frequently used links.
 
 ## Suggested structure
 
-- Put one topic in one Markdown file.
-- Keep titles short so the sidebar stays clean.
-- Use `order` in frontmatter to control sidebar order.
+* Put one topic in one Markdown file.
+* Keep titles short so the sidebar stays clean.
+* Use `order` in frontmatter to control sidebar order.
