@@ -1,5 +1,5 @@
-import type { DocPageData } from "@/lib/docs";
-import type { CSSProperties } from "react";
+import type { DocNavNode, DocPageData } from "@/lib/docs";
+import type { CSSProperties, ReactNode } from "react";
 
 import { useState } from "react";
 import clsx from "clsx";
@@ -27,11 +27,195 @@ function SidebarToggleIcon() {
   );
 }
 
+function FolderChevron({ isExpanded }: { isExpanded: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={clsx(
+        "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+        isExpanded && "rotate-90",
+      )}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+const getFolderSlugs = (items: DocNavNode[]) =>
+  items.flatMap((item): string[] =>
+    item.type === "folder" ? [item.slug, ...getFolderSlugs(item.children)] : [],
+  );
+
+const containsActivePage = (item: DocNavNode, activeSlug: string): boolean =>
+  item.type === "page"
+    ? item.slug === activeSlug
+    : item.children.some((child) => containsActivePage(child, activeSlug));
+
+function DocsNavChildren({
+  children,
+  isExpanded,
+}: {
+  children: ReactNode;
+  isExpanded: boolean;
+}) {
+  return (
+    <div
+      className="docs-nav-children"
+      data-expanded={isExpanded ? "true" : "false"}
+    >
+      <div className="docs-nav-children-inner">{children}</div>
+    </div>
+  );
+}
+
+function DocsNavTree({
+  items,
+  activeSlug,
+  expandedIds,
+  isSidebarCollapsed,
+  depth = 0,
+  onActivateItem,
+  onToggleFolder,
+}: {
+  items: DocNavNode[];
+  activeSlug: string;
+  expandedIds: Set<string>;
+  isSidebarCollapsed: boolean;
+  depth?: number;
+  onActivateItem: () => void;
+  onToggleFolder: (slug: string) => void;
+}) {
+  return (
+    <ul className={clsx("docs-nav-tree", depth > 0 && "docs-nav-tree-nested")}>
+      {items.map((item, index) => {
+        const isFolder = item.type === "folder";
+        const isExpanded = isFolder && expandedIds.has(item.slug);
+        const isActive = containsActivePage(item, activeSlug);
+        const itemStyle = {
+          "--docs-item-index": index,
+          "--docs-depth": depth,
+        } as CSSProperties;
+
+        return (
+          <li key={item.slug}>
+            {isFolder ? (
+              <Button
+                fullWidth
+                aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.title}`}
+                className={clsx(
+                  "docs-nav-link docs-nav-folder group relative flex shrink-0 items-center justify-start gap-2 overflow-hidden rounded-md px-3 py-2 text-left text-sm [&>span]:justify-start",
+                  isActive
+                    ? "docs-nav-folder-active text-accent"
+                    : "text-muted",
+                  isSidebarCollapsed && "lg:justify-center lg:px-2",
+                )}
+                size="sm"
+                style={itemStyle}
+                variant="ghost"
+                onPress={() => {
+                  onActivateItem();
+                  onToggleFolder(item.slug);
+                }}
+              >
+                <FolderChevron isExpanded={isExpanded} />
+                <span
+                  className={clsx(
+                    "min-w-0 flex-1 truncate text-left transition-[max-width,opacity,transform] duration-300 ease-out",
+                    isSidebarCollapsed
+                      ? "lg:max-w-0 lg:translate-x-2 lg:opacity-0"
+                      : "max-w-48 opacity-100",
+                  )}
+                >
+                  {item.title}
+                </span>
+              </Button>
+            ) : (
+              <SmoothLink
+                aria-current={item.slug === activeSlug ? "page" : undefined}
+                className={clsx(
+                  "docs-nav-link group relative flex shrink-0 items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-sm no-underline",
+                  item.slug === activeSlug
+                    ? "bg-accent/10 text-accent"
+                    : "text-muted hover:bg-surface hover:text-foreground",
+                  isSidebarCollapsed && "lg:justify-center lg:px-2",
+                )}
+                href={item.href}
+                style={itemStyle}
+                title={item.title}
+                onClick={onActivateItem}
+              >
+                <span
+                  className={clsx(
+                    "h-1.5 w-1.5 shrink-0 rounded-full transition-[background,transform] duration-300 ease-out",
+                    item.slug === activeSlug
+                      ? "scale-125 bg-accent"
+                      : "bg-muted/50 group-hover:bg-foreground/60",
+                  )}
+                />
+                <span
+                  className={clsx(
+                    "truncate transition-[max-width,opacity,transform] duration-300 ease-out",
+                    isSidebarCollapsed
+                      ? "lg:max-w-0 lg:translate-x-2 lg:opacity-0"
+                      : "max-w-48 opacity-100",
+                  )}
+                >
+                  {item.title}
+                </span>
+              </SmoothLink>
+            )}
+            {isFolder ? (
+              <DocsNavChildren isExpanded={isExpanded}>
+                <DocsNavTree
+                  activeSlug={activeSlug}
+                  depth={depth + 1}
+                  expandedIds={expandedIds}
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  items={item.children}
+                  onActivateItem={onActivateItem}
+                  onToggleFolder={onToggleFolder}
+                />
+              </DocsNavChildren>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function DocsLayout({ doc }: { doc: DocPageData }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    () => new Set(getFolderSlugs(doc.navItems)),
+  );
   const layoutStyle = {
     "--docs-sidebar-width": isSidebarCollapsed ? "4.5rem" : "15rem",
   } as CSSProperties;
+
+  const toggleFolder = (slug: string) => {
+    setExpandedIds((items) => {
+      const nextItems = new Set(items);
+
+      if (nextItems.has(slug)) {
+        nextItems.delete(slug);
+      } else {
+        nextItems.add(slug);
+      }
+
+      return nextItems;
+    });
+  };
+
+  const expandSidebarOnItemSelect = () => {
+    setIsSidebarCollapsed(false);
+  };
 
   return (
     <section
@@ -67,42 +251,15 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
             </Button>
           </div>
 
-          <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-            {doc.navItems.map((item, index) => (
-              <SmoothLink
-                key={item.slug}
-                aria-current={item.slug === doc.slug ? "page" : undefined}
-                className={clsx(
-                  "docs-nav-link group relative flex shrink-0 items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-sm no-underline",
-                  item.slug === doc.slug
-                    ? "bg-accent/10 text-accent"
-                    : "text-muted hover:bg-surface hover:text-foreground",
-                  isSidebarCollapsed && "lg:justify-center lg:px-2",
-                )}
-                href={item.href}
-                style={{ "--docs-item-index": index } as CSSProperties}
-                title={item.title}
-              >
-                <span
-                  className={clsx(
-                    "h-1.5 w-1.5 shrink-0 rounded-full transition-[background,transform] duration-300 ease-out",
-                    item.slug === doc.slug
-                      ? "scale-125 bg-accent"
-                      : "bg-muted/50 group-hover:bg-foreground/60",
-                  )}
-                />
-                <span
-                  className={clsx(
-                    "truncate transition-[max-width,opacity,transform] duration-300 ease-out",
-                    isSidebarCollapsed
-                      ? "lg:max-w-0 lg:translate-x-2 lg:opacity-0"
-                      : "max-w-48 opacity-100",
-                  )}
-                >
-                  {item.title}
-                </span>
-              </SmoothLink>
-            ))}
+          <nav className="overflow-x-auto lg:overflow-visible">
+            <DocsNavTree
+              activeSlug={doc.slug}
+              expandedIds={expandedIds}
+              isSidebarCollapsed={isSidebarCollapsed}
+              items={doc.navItems}
+              onActivateItem={expandSidebarOnItemSelect}
+              onToggleFolder={toggleFolder}
+            />
           </nav>
         </div>
       </aside>

@@ -1,11 +1,13 @@
 import { useMemo, useRef } from "react";
+import { Button } from "@heroui/react";
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
   CreateLink,
   headingsPlugin,
+  iconComponentFor$,
   imagePlugin,
-  InsertImage,
+  insertImage$,
   lexicalTheme,
   linkDialogPlugin,
   linkPlugin,
@@ -15,11 +17,14 @@ import {
   MDXEditor,
   type MDXEditorMethods,
   quotePlugin,
+  readOnly$,
   Separator,
   thematicBreakPlugin,
   InsertThematicBreak,
   toolbarPlugin,
   UndoRedo,
+  useCellValues,
+  usePublisher,
 } from "@mdxeditor/editor";
 
 type MarkdownEditorClientProps = {
@@ -86,6 +91,46 @@ const imageUploadHandler = async (image: File): Promise<string> => {
   }
   return data.url;
 };
+
+function ImageUploadButton() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const insertImage = usePublisher(insertImage$);
+  const [readOnly, iconComponentFor] = useCellValues(
+    readOnly$,
+    iconComponentFor$,
+  );
+
+  return (
+    <>
+      <Button
+        isIconOnly
+        aria-label="Upload image"
+        className="markdown-editor-upload-button"
+        isDisabled={readOnly}
+        size="sm"
+        type="button"
+        variant="tertiary"
+        onPress={() => inputRef.current?.click()}
+      >
+        {iconComponentFor("add_photo")}
+      </Button>
+      <input
+        ref={inputRef}
+        accept="image/*"
+        className="sr-only"
+        type="file"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+
+          if (!file) return;
+
+          insertImage({ file });
+          event.currentTarget.value = "";
+        }}
+      />
+    </>
+  );
+}
 
 export default function MarkdownEditorClient({
   value,
@@ -155,7 +200,7 @@ export default function MarkdownEditorClient({
             <ListsToggle options={["bullet", "number"]} />
             <Separator />
             <CreateLink />
-            <InsertImage />
+            <ImageUploadButton />
             <Separator />
             <InsertThematicBreak />
           </>

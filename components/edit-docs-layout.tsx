@@ -1,5 +1,5 @@
 import type { DragEvent, FormEvent } from "react";
-import type { DocSourceItem } from "@/lib/docs";
+import type { DocNavNode, DocSourceItem } from "@/lib/docs";
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,13 +51,6 @@ const defaultProfile: Profile = {
   qq: "",
   github: "",
 };
-
-const formatSegmentTitle = (segment: string) =>
-  segment
-    .split(/[-_]/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 
 const getMarkdownTitle = (content?: string) => {
   const title = content?.match(/^#\s+(.+)$/m)?.[1]?.trim();
@@ -185,48 +178,34 @@ const getFolderIds = (nodes: EditNode[]) => {
   return ids;
 };
 
-const buildTree = (docs: DocSourceItem[]) => {
-  const root: EditNode[] = [];
-  const folders = new Map<string, EditNode>();
+const buildTreeFromNav = (
+  items: DocNavNode[],
+  docsBySlug: Map<string, DocSourceItem>,
+  parentId: string | null = null,
+): EditNode[] =>
+  items.map((item) => {
+    if (item.type === "folder") {
+      const id = `folder:${item.slug}`;
 
-  docs.forEach((doc) => {
-    const segments = doc.slug.split("/");
-    let parentId: string | null = null;
-    let siblings = root;
-    let folderPath = "";
+      return {
+        id,
+        type: "folder",
+        title: item.title,
+        parentId,
+        children: buildTreeFromNav(item.children, docsBySlug, id),
+      };
+    }
 
-    segments.slice(0, -1).forEach((segment) => {
-      folderPath = folderPath ? `${folderPath}/${segment}` : segment;
-      const folderId = `folder:${folderPath}`;
-      let folder = folders.get(folderId);
+    const doc = docsBySlug.get(item.slug);
 
-      if (!folder) {
-        folder = {
-          id: folderId,
-          type: "folder",
-          title: formatSegmentTitle(segment),
-          parentId,
-          children: [],
-        };
-        folders.set(folderId, folder);
-        siblings.push(folder);
-      }
-
-      parentId = folder.id;
-      siblings = folder.children ?? [];
-    });
-
-    siblings.push({
-      id: `page:${doc.slug}`,
+    return {
+      id: `page:${item.slug}`,
       type: "page",
-      title: doc.title,
+      title: item.title,
       parentId,
-      content: doc.content,
-    });
+      content: doc?.content ?? "",
+    };
   });
-
-  return root;
-};
 
 function AddFolderIcon() {
   return (
@@ -477,7 +456,7 @@ function EditTree({
               <Button
                 fullWidth
                 className={clsx(
-                  "edit-tree-row group",
+                  "edit-tree-row group justify-start text-left [&>span]:justify-start",
                   selectedPageId === node.id && "bg-accent/10 text-accent",
                 )}
                 size="sm"
@@ -501,7 +480,7 @@ function EditTree({
                     onCommit={(value) => onRenameCommit(node.id, value)}
                   />
                 ) : (
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 truncate text-left">
                     {displayTitle}
                   </span>
                 )}
@@ -577,12 +556,21 @@ function ProfileField({
 
 export function EditDocsLayout({
   docs,
+  navItems,
   initialSlug,
 }: {
   docs: DocSourceItem[];
+  navItems: DocNavNode[];
   initialSlug?: string;
 }) {
-  const initialTree = useMemo(() => buildTree(docs), [docs]);
+  const docsBySlug = useMemo(
+    () => new Map(docs.map((doc) => [doc.slug, doc])),
+    [docs],
+  );
+  const initialTree = useMemo(
+    () => buildTreeFromNav(navItems, docsBySlug),
+    [docsBySlug, navItems],
+  );
   const initialContents = useMemo(
     () =>
       docs.reduce<Record<string, string>>((acc, doc) => {

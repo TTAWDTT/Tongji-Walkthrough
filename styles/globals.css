@@ -168,6 +168,99 @@ html {
     transform: translateX(2px);
 }
 
+.docs-nav-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.docs-nav-tree-nested {
+    margin-top: 0.35rem;
+    margin-left: 0.85rem;
+    border-left: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
+    padding-left: 0.55rem;
+    transition: border-color 200ms ease;
+}
+
+.docs-nav-children {
+    height: 0;
+    opacity: 0;
+    overflow: hidden;
+    interpolate-size: allow-keywords;
+    transition:
+        height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+        opacity 180ms ease;
+    will-change: height, opacity;
+}
+
+.docs-nav-children-inner {
+    min-height: 0;
+    overflow: hidden;
+    transform: translateY(-2px);
+    transform-origin: top left;
+    transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+}
+
+.docs-nav-children[data-expanded="true"] {
+    height: auto;
+    opacity: 1;
+}
+
+.docs-nav-children[data-expanded="true"] .docs-nav-children-inner {
+    transform: translateY(0);
+}
+
+.docs-nav-children[data-expanded="false"] .docs-nav-tree-nested {
+    border-left-color: transparent;
+}
+
+@supports not (interpolate-size: allow-keywords) {
+    .docs-nav-children[data-expanded="false"] {
+        display: none;
+    }
+}
+
+.docs-nav-folder {
+    --button-bg: transparent;
+    --button-bg-hover: color-mix(in oklch, var(--foreground) 6%, transparent);
+    --button-bg-pressed: color-mix(in oklch, var(--foreground) 8%, transparent);
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.docs-nav-folder:hover,
+.docs-nav-folder[data-hovered="true"] {
+    background: var(--button-bg-hover) !important;
+    background-color: var(--button-bg-hover) !important;
+    color: var(--foreground);
+}
+
+.docs-nav-folder-active {
+    --button-bg: transparent;
+    --button-bg-hover: color-mix(in oklch, var(--foreground) 6%, transparent);
+    --button-bg-pressed: color-mix(in oklch, var(--foreground) 8%, transparent);
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--accent);
+}
+
+.docs-nav-folder-active:hover,
+.docs-nav-folder-active[data-hovered="true"] {
+    background: var(--button-bg-hover) !important;
+    background-color: var(--button-bg-hover) !important;
+    color: var(--accent);
+}
+
+.docs-nav-folder > span,
+.edit-tree-row > span {
+    justify-content: flex-start;
+    text-align: left;
+}
+
 .edit-tree-row {
     display: flex;
     width: 100%;
@@ -438,6 +531,18 @@ html {
 .markdown-editor [role="toolbar"] {
     border-bottom: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
     background: color-mix(in oklch, var(--background) 92%, var(--foreground) 8%);
+}
+
+.markdown-editor-upload-button {
+    width: 2rem;
+    min-height: 2rem;
+    padding: 0;
+    border-radius: 0.375rem;
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif !important;
+}
+
+.markdown-editor-upload-button svg {
+    margin: 0 !important;
 }
 
 .markdown-editor-loading {
