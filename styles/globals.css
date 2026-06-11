@@ -533,6 +533,18 @@ html {
     background: color-mix(in oklch, var(--background) 92%, var(--foreground) 8%);
 }
 
+.markdown-editor-upload-button {
+    width: 2rem;
+    min-height: 2rem;
+    padding: 0;
+    border-radius: 0.375rem;
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif !important;
+}
+
+.markdown-editor-upload-button svg {
+    margin: 0 !important;
+}
+
 .markdown-editor-loading {
     display: flex;
     min-height: 12rem;
