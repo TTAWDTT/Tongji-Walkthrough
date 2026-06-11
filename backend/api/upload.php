@@ -73,7 +73,7 @@ $prNumber = isset($_POST['pr_number']) ? (int)$_POST['pr_number'] : null;
 $email = $_POST['email'] ?? null;
 
 // 生成唯一文件名
-$uniqueName = 'upload_' . dechex(time()) . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+$uniqueName = 'upload_' . dechex(time()) . '_' . substr(hash('sha256', uniqid(mt_rand(), true)), 0, 32) . '.' . $ext;
 
 // 保存到本地
 $storagePath = IMAGE_STORAGE_PATH . $uniqueName;
