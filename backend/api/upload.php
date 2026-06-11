@@ -59,7 +59,7 @@ if ($fileSize > MAX_UPLOAD_SIZE) {
 // 校验真实 MIME (通过 finfo)
 $finfo = finfo_open(FILEINFO_MIME_TYPE);
 $detectedMime = finfo_file($finfo, $tmpPath);
-finfo_close($finfo);
+// finfo resource cleaned up automatically since PHP 8.0
 $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 if (!in_array($detectedMime, $allowedMimes, true)) {
     http_response_code(400);

@@ -47,7 +47,6 @@ if ($image && $image['branch_committed'] && $image['pr_number']) {
 
         $imageContent = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCode === 200 && $imageContent) {
             $mimeType = $image['mime_type'] ?: 'image/jpeg';

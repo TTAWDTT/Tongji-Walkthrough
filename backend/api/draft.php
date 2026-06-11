@@ -57,6 +57,7 @@ if (!$hasChanges) {
 // --- 生成分支名并进行与 submit 相同的操作 ---
 
 $sanitizedName = preg_replace('/[^a-zA-Z0-9_-]/', '', str_replace(' ', '_', $profile['name']));
+if ($sanitizedName === '') $sanitizedName = 'user';
 $timestamp = date('Ymd-His');
 $branchName = 'edit/' . $sanitizedName . '/' . $timestamp;
 

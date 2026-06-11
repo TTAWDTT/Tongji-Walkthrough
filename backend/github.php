@@ -34,7 +34,6 @@ function githubApi(string $method, string $path, ?array $body = null): array {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
 
     if ($error) {
         http_response_code(502);
@@ -117,9 +116,7 @@ function createPR(string $title, string $body, string $branchName, bool $draft =
 }
 
 function markPRReady(int $prNumber): void {
-    githubApi('PATCH', '/repos/' . GITHUB_OWNER . '/' . GITHUB_REPO . '/pulls/' . $prNumber, [
-        'draft' => false,
-    ]);
+    githubApi('POST', '/repos/' . GITHUB_OWNER . '/' . GITHUB_REPO . '/pulls/' . $prNumber . '/ready_for_review');
 }
 
 function getPR(int $prNumber): array {

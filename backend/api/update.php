@@ -72,44 +72,41 @@ try {
     exit;
 }
 
-// --- 简化策略：删除旧分支，从最新 main 重建 ---
-// 这样可以避免复杂的 rebase/冲突合并逻辑
-// 缺点：如果有人在旧分支上做了额外 commit，会丢失
-// 优点：简单可靠，对编辑场景足够
+// --- 简化策略：直接更新分支上的文件 ---
+// 不再删重建（会导致 PR 被 GitHub auto-close）
+// 每个文件用当前分支上的 sha 进行覆写
 
 try {
-    // 先删除旧分支
+    // 先检查分支是否存在
     try {
-        deleteBranch($branchName);
-    } catch (Exception $ignored) {
-        // 分支可能已被删除
+        // 读取分支引用确认存在
+        githubApi('GET', '/repos/' . GITHUB_OWNER . '/' . GITHUB_REPO . '/git/ref/heads/' . $branchName);
+    } catch (Exception $e) {
+        // 分支不存在，从 main 重建
+        createBranch($branchName);
     }
 
-    // 从最新 main 重建
-    createBranch($branchName);
-} catch (Exception $e) {
-    http_response_code(502);
-    echo json_encode(['success' => false, 'error' => 'Failed to recreate branch: ' . $e->getMessage()]);
-    exit;
-}
+    $modified   = $changes['modified'] ?? [];
+    $created    = $changes['created'] ?? [];
+    $deleted    = $changes['deleted'] ?? [];
+    $imageFiles = $changes['images'] ?? [];
+    $commitPrefix = '[编辑更新] ' . ($prMapping['submitter_name'] ?? 'User') . ': ';
 
-// --- 写入所有文件 ---
-
-$modified = $changes['modified'] ?? [];
-$created  = $changes['created'] ?? [];
-$deleted  = $changes['deleted'] ?? [];
-$imageFiles = $changes['images'] ?? [];
-
-$commitPrefix = '[编辑更新] ' . ($prMapping['submitter_name'] ?? 'User') . ': ';
-
-try {
     foreach ($modified as $filePath => $content) {
-        $existing = getFileContent($filePath, GITHUB_BRANCH);
-        $sha = $existing ? $existing['sha'] : null;
+        // 先尝试从分支获取当前 sha
+        $branchContent = getFileContent($filePath, $branchName);
+        $sha = $branchContent ? $branchContent['sha'] : null;
+
         if ($sha) {
             commitFileWithSha($branchName, $filePath, $content, $sha, $commitPrefix . 'Update ' . basename($filePath));
         } else {
-            commitFile($branchName, $filePath, $content, $commitPrefix . 'Create ' . basename($filePath));
+            // 分支上还没有这个文件，从 main 尝试
+            $existing = getFileContent($filePath, GITHUB_BRANCH);
+            if ($existing) {
+                commitFileWithSha($branchName, $filePath, $content, $existing['sha'], $commitPrefix . 'Update ' . basename($filePath));
+            } else {
+                commitFile($branchName, $filePath, $content, $commitPrefix . 'Create ' . basename($filePath));
+            }
         }
         usleep(200000);
     }
@@ -120,9 +117,9 @@ try {
     }
 
     foreach ($deleted as $filePath) {
-        $existing = getFileContent($filePath, GITHUB_BRANCH);
-        if ($existing) {
-            deleteFile($branchName, $filePath, $existing['sha'], $commitPrefix . 'Delete ' . basename($filePath));
+        $branchContent = getFileContent($filePath, $branchName);
+        if ($branchContent) {
+            deleteFile($branchName, $filePath, $branchContent['sha'], $commitPrefix . 'Delete ' . basename($filePath));
             usleep(200000);
         }
     }
