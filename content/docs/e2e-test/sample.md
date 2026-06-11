@@ -1,7 +1,7 @@
 ---
-title: "E2E 样例"
+title: "E2E 样例 v2"
 ---
 
-# E2E Sample
+# E2E Sample v2
 
-hello
+updated
