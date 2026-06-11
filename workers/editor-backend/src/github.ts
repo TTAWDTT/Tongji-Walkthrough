@@ -190,6 +190,15 @@ export type CommitResult = {
   written: string[];
 };
 
+type CommitOptions = {
+  /**
+   * Build the new tree from this ref instead of the target branch. The new
+   * commit still uses the target branch head as its parent, so the PR branch
+   * history stays linear while its file tree is projected from main.
+   */
+  baseRef?: string;
+};
+
 type TreeEntry = {
   path: string;
   mode: "100644";
@@ -241,8 +250,12 @@ export async function commitToBranch(
   writes: FileWrite[],
   deletes: string[],
   message: string,
+  options: CommitOptions = {},
 ): Promise<CommitResult> {
-  const { headSha, treeSha, files } = await listTree(env, branch);
+  const branchState = await listTree(env, branch);
+  const baseState = options.baseRef
+    ? await listTree(env, options.baseRef)
+    : branchState;
   const entries: TreeEntry[] = [];
   const written: string[] = [];
 
@@ -254,7 +267,7 @@ export async function commitToBranch(
     const sha = await gitBlobSha(bytes);
 
     written.push(write.path);
-    if (files.get(write.path) === sha) continue; // 内容未变化，跳过
+    if (baseState.files.get(write.path) === sha) continue; // 内容未变化，跳过
 
     const blobRes = await githubApi(
       env,
@@ -273,25 +286,34 @@ export async function commitToBranch(
   }
 
   for (const path of deletes) {
-    if (!files.has(path)) continue; // 分支上不存在，跳过
+    if (!baseState.files.has(path)) continue; // 基线不存在，跳过
 
     entries.push({ path, mode: "100644", type: "blob", sha: null });
   }
 
-  if (entries.length === 0) return { committed: false, written };
+  let targetTreeSha = baseState.treeSha;
 
-  const treeRes = await githubApi(
-    env,
-    "POST",
-    `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/git/trees`,
-    { base_tree: treeSha, tree: entries },
-  );
-  const newTree = (await treeRes.json()) as { sha: string };
+  if (entries.length > 0) {
+    const treeRes = await githubApi(
+      env,
+      "POST",
+      `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/git/trees`,
+      { base_tree: baseState.treeSha, tree: entries },
+    );
+    const newTree = (await treeRes.json()) as { sha: string };
+
+    targetTreeSha = newTree.sha;
+  }
+
+  if (targetTreeSha === branchState.treeSha) {
+    return { committed: false, written };
+  }
+
   const commitRes = await githubApi(
     env,
     "POST",
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/git/commits`,
-    { message, tree: newTree.sha, parents: [headSha] },
+    { message, tree: targetTreeSha, parents: [branchState.headSha] },
   );
   const newCommit = (await commitRes.json()) as { sha: string };
 

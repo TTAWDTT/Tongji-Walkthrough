@@ -28,6 +28,7 @@ import {
   fetchDocsListing,
   fetchPRChanges,
   getApiBaseUrl,
+  normalizeEmail,
   readCachedPR,
   updatePR,
   writeCachedPR,
@@ -702,6 +703,9 @@ export function EditDocsLayout({
   const [committedPaths, setCommittedPaths] = useState<Record<string, string>>(
     {},
   );
+  const [knownDraftPrNumber, setKnownDraftPrNumber] = useState<number | null>(
+    null,
+  );
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -731,6 +735,7 @@ export function EditDocsLayout({
     const fmUpdates: Record<string, string> = {};
     const committed: Record<string, string> = {};
     const removedSlugs: string[] = [];
+    const removedFolderSlugs: string[] = [];
     const metaTitles = new Map<string, string>();
     const addedPages: { slug: string; dirSlug: string; title: string }[] = [];
 
@@ -738,7 +743,11 @@ export function EditDocsLayout({
       const meta = parseMetaPath(file.path);
 
       if (meta) {
-        if (file.status === "removed") continue;
+        if (file.status === "removed") {
+          removedFolderSlugs.push(meta.dirSlug);
+          committed[`folder:${meta.dirSlug}`] = file.path;
+          continue;
+        }
         try {
           const parsedMeta = JSON.parse(file.content ?? "") as {
             title?: string;
@@ -760,6 +769,7 @@ export function EditDocsLayout({
 
       if (file.status === "removed") {
         removedSlugs.push(parsed.slug);
+        committed[`page:${parsed.slug}`] = file.path;
         continue;
       }
       if (file.status === "renamed" && file.previousPath) {
@@ -817,6 +827,10 @@ export function EditDocsLayout({
 
       for (const slug of removedSlugs) {
         [next] = removeNode(next, `page:${slug}`);
+      }
+
+      for (const slug of removedFolderSlugs) {
+        [next] = removeNode(next, `folder:${slug}`);
       }
 
       for (const dirSlug of metaTitles.keys()) {
@@ -947,6 +961,7 @@ export function EditDocsLayout({
 
         if (cancelled) return;
         applyPRChangesRef.current(pr);
+        setKnownDraftPrNumber(cached.prNumber);
         setSyncNotice(`已恢复暂存 PR #${cached.prNumber} 的草稿内容。`);
       } catch (err) {
         if (cancelled) return;
@@ -954,6 +969,7 @@ export function EditDocsLayout({
           // PR closed, merged or no longer accessible: start fresh.
           clearCachedPR();
           setCachedPRState(null);
+          setKnownDraftPrNumber(null);
           setSyncNotice("之前的暂存 PR 已关闭或失效，已为你重新开始。");
         } else {
           setSyncNotice("无法连接后端，暂存内容恢复失败，请稍后刷新重试。");
@@ -1002,7 +1018,13 @@ export function EditDocsLayout({
     ],
   );
 
-  const isSameUser = cachedPR !== null && cachedPR.email === profile.email;
+  const normalizedProfileEmail = normalizeEmail(profile.email);
+  const hasKnownDraft =
+    cachedPR !== null &&
+    cachedPR.email === normalizedProfileEmail &&
+    knownDraftPrNumber === cachedPR.prNumber;
+  const isSameUser =
+    cachedPR !== null && cachedPR.email === normalizedProfileEmail;
 
   const submitToBackend = (
     mode: "draft" | "ready",
@@ -1018,7 +1040,7 @@ export function EditDocsLayout({
     if (cachedPR && isSameUser) {
       return updatePR(
         cachedPR.prNumber,
-        profile.email,
+        normalizedProfileEmail,
         payload,
         mode === "ready",
       );
@@ -1030,7 +1052,7 @@ export function EditDocsLayout({
       {
         studentId: profile.studentId.trim(),
         name: profile.name.trim(),
-        email: profile.email.trim(),
+        email: normalizedProfileEmail,
         qq: profile.qq.trim() || undefined,
         github: profile.github.trim() || undefined,
       },
@@ -1050,6 +1072,7 @@ export function EditDocsLayout({
 
     clearCachedPR();
     setCachedPRState(null);
+    setKnownDraftPrNumber(null);
     setCommittedPaths({});
     setUploadedImages([]);
     setSyncNotice(null);
@@ -1264,10 +1287,12 @@ export function EditDocsLayout({
     }
 
     const changeSet = buildEditorChanges();
-    // Promoting an existing draft to ready is meaningful even without edits.
-    const promoteOnly = mode === "ready" && isSameUser;
+    // Existing drafts may need an "empty" update to project the branch back
+    // onto main after the user reverts every visible edit.
+    const reconcileOnly = mode === "draft" && hasKnownDraft;
+    const promoteOnly = mode === "ready" && hasKnownDraft;
 
-    if (!changeSet.hasChanges && !promoteOnly) {
+    if (!changeSet.hasChanges && !promoteOnly && !reconcileOnly) {
       setSubmitError("没有检测到任何改动。");
 
       return;
@@ -1298,14 +1323,16 @@ export function EditDocsLayout({
         const cache: CachedPR = {
           prNumber: result.prNumber,
           type: "draft",
-          email: profile.email,
+          email: normalizedProfileEmail,
         };
 
         writeCachedPR(cache);
         setCachedPRState(cache);
+        setKnownDraftPrNumber(result.prNumber);
       } else if (mode === "ready") {
         clearCachedPR();
         setCachedPRState(null);
+        setKnownDraftPrNumber(null);
         setCommittedPaths({});
         setUploadedImages([]);
         setSyncNotice(null);
@@ -1554,7 +1581,7 @@ export function EditDocsLayout({
 
                   {pendingChanges &&
                     !pendingChanges.hasChanges &&
-                    !cachedPR && (
+                    !hasKnownDraft && (
                       <div className="rounded-md border border-separator bg-muted/5 px-4 py-3 text-sm text-muted">
                         当前没有任何改动可提交。
                       </div>
@@ -1628,7 +1655,11 @@ export function EditDocsLayout({
                   <Button
                     isDisabled={
                       isSubmitting ||
-                      Boolean(pendingChanges && !pendingChanges.hasChanges)
+                      Boolean(
+                        pendingChanges &&
+                          !pendingChanges.hasChanges &&
+                          !hasKnownDraft,
+                      )
                     }
                     variant="secondary"
                     onPress={() => handleSubmit("draft")}
@@ -1645,7 +1676,7 @@ export function EditDocsLayout({
                       Boolean(
                         pendingChanges &&
                           !pendingChanges.hasChanges &&
-                          !cachedPR,
+                          !hasKnownDraft,
                       )
                     }
                     type="submit"

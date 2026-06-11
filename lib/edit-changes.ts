@@ -112,6 +112,15 @@ export const withFrontmatterTitle = (
 export const folderMetaContent = (title: string, order: number): string =>
   `${JSON.stringify({ title, order }, null, 2)}\n`;
 
+const referencedUploadedImages = (
+  imageNames: string[],
+  contents: Record<string, string>,
+): string[] => {
+  const source = Object.values(contents).join("\n");
+
+  return [...new Set(imageNames)].filter((name) => source.includes(name));
+};
+
 const docPath = (dirPrefix: string, fileSegment: string): string =>
   dirPrefix
     ? `${DOCS_PREFIX}/${dirPrefix}/${fileSegment}.md`
@@ -321,7 +330,7 @@ export function buildChanges(args: {
     deleted.delete(p);
   }
 
-  const images = [...new Set(uploadedImages)];
+  const images = referencedUploadedImages(uploadedImages, contents);
   const deletedList = [...deleted];
   const hasChanges =
     Object.keys(modified).length > 0 ||

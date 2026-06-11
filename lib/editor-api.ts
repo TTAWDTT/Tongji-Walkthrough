@@ -11,6 +11,8 @@ export type CachedPR = {
   email: string;
 };
 
+export const normalizeEmail = (email: string): string => email.trim();
+
 export type PRFileChange = {
   path: string;
   status: "added" | "modified" | "removed" | "renamed";
@@ -50,7 +52,9 @@ export const readCachedPR = (): CachedPR | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedPR;
 
-    return typeof parsed?.prNumber === "number" ? parsed : null;
+    return typeof parsed?.prNumber === "number"
+      ? { ...parsed, email: normalizeEmail(parsed.email ?? "") }
+      : null;
   } catch {
     return null;
   }
@@ -58,7 +62,10 @@ export const readCachedPR = (): CachedPR | null => {
 
 export const writeCachedPR = (value: CachedPR): void => {
   try {
-    localStorage.setItem(PR_CACHE_KEY, JSON.stringify(value));
+    localStorage.setItem(
+      PR_CACHE_KEY,
+      JSON.stringify({ ...value, email: normalizeEmail(value.email) }),
+    );
   } catch {
     /* storage unavailable */
   }

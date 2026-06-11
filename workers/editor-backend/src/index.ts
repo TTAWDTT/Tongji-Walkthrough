@@ -555,9 +555,6 @@ app.post("/api/update", async (c) => {
   if (body.profile.email !== mapping.submitterEmail) {
     return c.json({ success: false, error: "Email mismatch" }, 403);
   }
-  if (!hasDeclaredChanges(changes) && !body.promote) {
-    return c.json({ success: false, error: "没有检测到任何改动" }, 400);
-  }
   const pathError = validateChangePaths(changes);
 
   if (pathError) {
@@ -589,6 +586,7 @@ app.post("/api/update", async (c) => {
       writes,
       deletes,
       `[编辑器] ${mapping.submitterName} 更新内容`,
+      { baseRef: c.env.GITHUB_BRANCH },
     );
 
     await syncImageRecords(c.env, images, body.prNumber, result.written);

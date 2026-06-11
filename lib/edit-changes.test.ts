@@ -323,10 +323,23 @@ describe("buildChanges", () => {
   it("dedupes uploaded images", () => {
     const args = baseArgs();
 
+    args.contents["page:introduction"] =
+      `${introBody}\n![a](/api/image?id=a.png)\n![b](/api/image?id=b.png)\n`;
     args.uploadedImages = ["a.png", "a.png", "b.png"];
     const result = buildChanges(args);
 
     expect(result.images).toEqual(["a.png", "b.png"]);
     expect(result.hasChanges).toBe(true);
+  });
+
+  it("drops uploaded images that are no longer referenced", () => {
+    const args = baseArgs();
+
+    args.contents["page:introduction"] =
+      `${introBody}\n![a](/api/image?id=a.png)\n`;
+    args.uploadedImages = ["a.png", "deleted.png"];
+    const result = buildChanges(args);
+
+    expect(result.images).toEqual(["a.png"]);
   });
 });
