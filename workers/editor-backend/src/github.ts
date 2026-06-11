@@ -103,7 +103,7 @@ async function getFileFromBranch(
     );
     const data = (await res.json()) as { content: string; sha: string };
     return {
-      content: atob(data.content),
+      content: base64ToUtf8(data.content),
       sha: data.sha,
     };
   } catch {
