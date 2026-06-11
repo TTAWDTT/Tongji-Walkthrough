@@ -1,5 +1,5 @@
 import { Chip } from "@heroui/react";
-
+import {Alert, Button, CloseButton, Spinner} from "@heroui/react";
 import DefaultLayout from "@/layouts/default";
 
 export default function DocsPage() {
@@ -21,6 +21,21 @@ export default function DocsPage() {
             是一个由同济学生维护的非官方指南。我们希望把那些散落在群聊、经验帖、口口相传里的信息，整理成一个更容易检索、也更容易持续更新的地方。这里会收集学习、生活、校园服务、课程、工具和常见问题等内容（不仅限于新生问题！）。这个项目不追求一次写完，也不假装给出唯一答案。它更像是一份不断生长的地图：如果你发现某处信息过时、遗漏，或者有更好的经验，欢迎通过
             GitHub 参与维护。
           </p>
+          <Alert status="danger" className='mt-4'>
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>版权声明</Alert.Title>
+              <Alert.Description>
+                以下是对于各部分版权的说明：
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
+                  <li>logo由Ziyi Zhuang原创，且并未借助AI手段，请勿随意转载/搬迁</li>
+                  <li>[学院与专业]、[校区与宿舍]两部分的文字内容属于对应部分的作者，若转载/引用，请直接联系或通过站长联系对应的作者，并挂上此站链接</li>
+                  <li>[学业][生活]部分的内容为大家合作完成，若需要转载/引用，请联系站长，并挂上此站链接</li>
+                  <li>该web page由TTAWDTT构建，如果您喜欢该设计，并希望用于您自己的内容，请在GitHub repo中鸣谢</li>
+                </ul>
+              </Alert.Description>
+            </Alert.Content>
+          </Alert>
         </div>
       </section>
     </DefaultLayout>
