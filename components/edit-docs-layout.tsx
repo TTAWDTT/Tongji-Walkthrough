@@ -627,6 +627,183 @@ export function EditDocsLayout({
     ? (contents[selectedPageId] ?? "")
     : "";
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+  // --- Backend integration: PR caching & diff building ---
+
+  const PR_CACHE_KEY = "edit_pr_info";
+
+  const getCachedPR = (): {
+    prNumber: number;
+    type: string;
+    email: string;
+  } | null => {
+    try {
+      const raw = localStorage.getItem(PR_CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedPR = (prNumber: number, type: string, email: string) => {
+    localStorage.setItem(
+      PR_CACHE_KEY,
+      JSON.stringify({ prNumber, type, email }),
+    );
+  };
+
+  const clearCachedPR = () => {
+    localStorage.removeItem(PR_CACHE_KEY);
+  };
+
+  // Build a minimal diff from the initial contents
+  const buildChanges = () => {
+    const modified: Record<string, string> = {};
+    const created: Record<string, string> = {};
+    const deleted: string[] = [];
+
+    // Walk the current tree to find all pages
+    const findCurrentPages = (
+      nodes: EditNode[],
+      pathPrefix: string = "",
+    ): Map<string, string> => {
+      const map = new Map<string, string>();
+      for (const node of nodes) {
+        if (node.type === "page") {
+          const slugFromId = node.id.startsWith("page:")
+            ? node.id.slice(5)
+            : null;
+          if (slugFromId) {
+            // Existing page
+            const content = contents[node.id] ?? node.content ?? "";
+            const initial = initialContents[node.id];
+            if (initial !== undefined && initial !== content) {
+              modified[`content/docs/${slugFromId}.md`] = content;
+            }
+          } else if (node.id.startsWith("draft-page-")) {
+            // New draft page: generate a slug from title
+            const slug =
+              (node.title || "untitled")
+                .toLowerCase()
+                .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+                .replace(/^-|-$/g, "") || "untitled";
+            const content = contents[node.id] ?? node.content ?? "";
+            const filePath = pathPrefix
+              ? `content/docs/${pathPrefix}/${slug}.md`
+              : `content/docs/${slug}.md`;
+            // Check if already in created
+            if (!(filePath in created)) created[filePath] = content;
+          }
+        } else if (node.type === "folder" && node.children) {
+          const folderSlug = node.title
+            .toLowerCase()
+            .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+            .replace(/^-|-$/g, "");
+          const childPrefix = pathPrefix
+            ? `${pathPrefix}/${folderSlug}`
+            : folderSlug;
+          const childMap = findCurrentPages(node.children, childPrefix);
+          childMap.forEach((content, path) => {
+            created[path] = content;
+          });
+        }
+      }
+      return map;
+    };
+
+    // Find pages that existed initially but are removed from tree
+    const currentPageIds = new Set<string>();
+    const collectIds = (nodes: EditNode[]) => {
+      for (const node of nodes) {
+        if (node.type === "page") currentPageIds.add(node.id);
+        if (node.children) collectIds(node.children);
+      }
+    };
+    collectIds(tree);
+
+    for (const doc of docs) {
+      const pageId = `page:${doc.slug}`;
+      if (!currentPageIds.has(pageId)) {
+        deleted.push(`content/docs/${doc.slug}.md`);
+      }
+    }
+
+    return { modified, created, deleted };
+  };
+
+  const submitToBackend = async (mode: "draft" | "ready") => {
+    const changes = buildChanges();
+    const cachedPR = getCachedPR();
+
+    // Check if PR cache belongs to the same user
+    const sameUser = cachedPR && cachedPR.email === profile.email;
+
+    if (cachedPR && sameUser && mode === "draft") {
+      // Update existing draft PR
+      const res = await fetch(`${apiBaseUrl}/update.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pr_number: cachedPR.prNumber,
+          promote: false,
+          profile: { email: profile.email },
+          changes,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Update failed");
+      }
+
+      return await res.json();
+    }
+
+    if (cachedPR && sameUser && mode === "ready") {
+      // Promote existing draft to ready
+      const res = await fetch(`${apiBaseUrl}/update.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pr_number: cachedPR.prNumber,
+          promote: true,
+          profile: { email: profile.email },
+          changes,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Promote failed");
+      }
+
+      return await res.json();
+    }
+
+    // Create new PR
+    const endpoint = mode === "draft" ? "draft.php" : "submit.php";
+    const res = await fetch(`${apiBaseUrl}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile, changes }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? "Submission failed");
+    }
+
+    return await res.json();
+  };
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{
+    prNumber: number;
+    prUrl: string;
+    prType: string;
+  } | null>(null);
 
   const clearHoverTimer = () => {
     if (!hoverTimer.current) return;
@@ -804,22 +981,49 @@ export function EditDocsLayout({
     clearDragState(targetFolderId);
   };
 
-  const submitProfile = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const validateProfile = (): boolean => {
     if (
       !profile.studentId.trim() ||
       !profile.name.trim() ||
       !profile.email.trim()
     )
+      return false;
+    if (!profile.qq.trim() && !profile.github.trim()) return false;
+    return true;
+  };
+
+  const handleSubmit = async (mode: "draft" | "ready") => {
+    if (!validateProfile()) return;
+    if (!apiBaseUrl) {
+      setSubmitError("后端服务未配置 (NEXT_PUBLIC_API_BASE_URL 为空)");
       return;
-    if (!profile.qq.trim() && !profile.github.trim()) return;
+    }
 
-    const submissionPayload = { changes: tree, contents, profile };
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    void submissionPayload;
-    setIsSubmitOpen(false);
-    setIsSuccessOpen(true);
+    try {
+      const result = await submitToBackend(mode);
+
+      setLastResult({
+        prNumber: result.pr_number,
+        prUrl: result.pr_url,
+        prType: mode,
+      });
+
+      if (mode === "draft" && result.pr_number) {
+        setCachedPR(result.pr_number, "draft", profile.email);
+      } else if (mode === "ready") {
+        clearCachedPR();
+      }
+
+      setIsSubmitOpen(false);
+      setIsSuccessOpen(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -836,10 +1040,19 @@ export function EditDocsLayout({
         </div>
         <div className="flex items-center justify-end gap-2">
           <NavbarActions basePath={basePath} className="hidden sm:flex" />
+          {getCachedPR() && (
+            <span className="hidden text-xs text-amber-500 sm:inline">
+              Draft #{getCachedPR()?.prNumber}
+            </span>
+          )}
           <Button
             size="sm"
-            variant="primary"
-            onPress={() => setIsSubmitOpen(true)}
+            variant="secondary"
+            onPress={() => {
+              setSubmitError(null);
+              setLastResult(null);
+              setIsSubmitOpen(true);
+            }}
           >
             submit
           </Button>
@@ -973,12 +1186,28 @@ export function EditDocsLayout({
         <Modal.Backdrop>
           <Modal.Container size="lg">
             <Modal.Dialog>
-              <Form onSubmit={submitProfile}>
+              <Form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSubmit("ready");
+                }}
+              >
                 <Modal.Header>
                   <Modal.Heading>提交信息</Modal.Heading>
                   <Modal.CloseTrigger />
                 </Modal.Header>
                 <Modal.Body className="grid gap-4">
+                  {getCachedPR() && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+                      已有暂存 PR #{getCachedPR()?.prNumber}。暂存将更新该
+                      PR，正式提交将转为 Ready 状态。
+                    </div>
+                  )}
+                  {submitError && (
+                    <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+                      提交失败：{submitError}
+                    </div>
+                  )}
                   <ProfileField
                     required
                     label="学号"
@@ -1029,9 +1258,24 @@ export function EditDocsLayout({
                     </p>
                   )}
                 </Modal.Body>
-                <Modal.Footer>
-                  <Button type="submit" variant="primary">
-                    确认提交
+                <Modal.Footer className="flex gap-2">
+                  <Button
+                    isDisabled={isSubmitting}
+                    variant="secondary"
+                    onPress={() => handleSubmit("draft")}
+                  >
+                    {isSubmitting
+                      ? "提交中..."
+                      : getCachedPR()
+                        ? "更新暂存"
+                        : "暂存 (Draft PR)"}
+                  </Button>
+                  <Button
+                    isDisabled={isSubmitting}
+                    type="submit"
+                    variant="primary"
+                  >
+                    {isSubmitting ? "提交中..." : "正式提交"}
                   </Button>
                 </Modal.Footer>
               </Form>
@@ -1045,19 +1289,46 @@ export function EditDocsLayout({
           <Modal.Container size="sm">
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading>提交成功</Modal.Heading>
+                <Modal.Heading>
+                  {lastResult?.prType === "draft" ? "暂存成功" : "提交成功"}
+                </Modal.Heading>
               </Modal.Header>
-              <Modal.Body>
-                <p className="leading-8 text-muted">提交成功，等待审核。</p>
+              <Modal.Body className="grid gap-4">
+                <p className="leading-8 text-muted">
+                  {lastResult?.prType === "draft"
+                    ? "您的更改已暂存为 Draft PR，可继续编辑后再次暂存或正式提交。"
+                    : "您的更改已提交，等待项目维护者审核合并。"}
+                </p>
+                {lastResult?.prUrl && (
+                  <a
+                    className="inline-flex items-center gap-2 text-sm text-accent underline underline-offset-2"
+                    href={lastResult.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    查看 PR #{lastResult.prNumber} →
+                  </a>
+                )}
               </Modal.Body>
-              <Modal.Footer>
+              <Modal.Footer className="flex gap-2">
+                {lastResult?.prType === "draft" && (
+                  <Button
+                    variant="tertiary"
+                    onPress={() => {
+                      clearCachedPR();
+                      setIsSuccessOpen(false);
+                    }}
+                  >
+                    放弃暂存
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   onPress={() => {
                     window.location.href = "/docs";
                   }}
                 >
-                  确定
+                  返回文档
                 </Button>
               </Modal.Footer>
             </Modal.Dialog>

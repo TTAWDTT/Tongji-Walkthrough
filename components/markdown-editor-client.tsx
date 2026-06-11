@@ -27,28 +27,56 @@ type MarkdownEditorClientProps = {
   onChange: (value: string) => void;
 };
 
-const imageUploadHandler = (image: File) =>
-  new Promise<string>((resolve, reject) => {
-    if (!image.type.startsWith("image/")) {
-      reject(new Error("Only image files can be uploaded."));
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
-      return;
+const imageUploadHandler = async (image: File): Promise<string> => {
+  if (!image.type.startsWith("image/")) {
+    throw new Error("Only image files can be uploaded.");
+  }
+
+  if (!API_BASE) {
+    // Fallback to base64 when no backend is configured
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("Failed to read image."));
+      });
+      reader.addEventListener("error", () => {
+        reject(reader.error ?? new Error("Failed to read image."));
+      });
+      reader.readAsDataURL(image);
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("image", image);
+
+  // Retrieve cached PR number to associate image with the draft PR
+  const cached = localStorage.getItem("edit_pr_info");
+  if (cached) {
+    try {
+      const info = JSON.parse(cached);
+      if (info.prNumber) formData.append("pr_number", String(info.prNumber));
+      if (info.email) formData.append("email", info.email);
+    } catch {
+      /* ignore */
     }
+  }
 
-    const reader = new FileReader();
-
-    reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Failed to read image."));
-      }
-    });
-    reader.addEventListener("error", () => {
-      reject(reader.error ?? new Error("Failed to read image."));
-    });
-    reader.readAsDataURL(image);
+  const res = await fetch(`${API_BASE}/upload.php`, {
+    method: "POST",
+    body: formData,
   });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error ?? "Image upload failed");
+  }
+
+  const data = await res.json();
+  return data.markdown;
+};
 
 export default function MarkdownEditorClient({
   value,
