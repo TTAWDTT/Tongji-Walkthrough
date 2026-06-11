@@ -43,3 +43,4 @@ bun.lockb
 /workers/editor-backend/node_modules/
 /workers/editor-backend/.wrangler/
 /workers/editor-backend/worker-configuration.d.ts
+/workers/editor-backend/.dev.vars

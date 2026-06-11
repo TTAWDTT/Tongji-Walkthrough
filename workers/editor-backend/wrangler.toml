@@ -12,12 +12,16 @@ id = "cca1784935014b00a7f588c650dbe6d7"
 binding = "IMAGES_BUCKET"
 bucket_name = "tongji-walkthrough-images"
 
-# Secret environment variables (set via `wrangler secret put`)
+# Plain-text config. Secrets (GITHUB_TOKEN, optional ADMIN_TOKEN) are set
+# separately via `wrangler secret put`.
 [vars]
 GITHUB_OWNER = "TTAWDTT"
 GITHUB_REPO = "Tongji-Walkthrough"
 GITHUB_BRANCH = "main"
-ALLOWED_ORIGINS = "https://tongji.one,https://TTAWDTT.github.io,https://tongjione.yzxoi.top"
+# Origin comparison is case-insensitive in code, but keep these lowercase.
+ALLOWED_ORIGINS = "https://tongji.one,https://ttawdtt.github.io,https://tongjione.yzxoi.top"
+# Public URL of this Worker, used to build image links.
+BASE_URL = "https://tongjione.yzxoi.top"
 
 # Cron for daily image cleanup
 [triggers]

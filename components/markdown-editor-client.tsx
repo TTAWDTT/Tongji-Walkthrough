@@ -27,69 +27,12 @@ import {
   usePublisher,
 } from "@mdxeditor/editor";
 
+import { uploadEditorImage } from "@/lib/editor-api";
+
 type MarkdownEditorClientProps = {
   value: string;
   onChange: (value: string) => void;
   onImageUploaded?: (filename: string) => void;
-};
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-
-const imageUploadHandler = async (image: File): Promise<string> => {
-  if (!image.type.startsWith("image/")) {
-    throw new Error("Only image files can be uploaded.");
-  }
-
-  if (!API_BASE) {
-    // Fallback to base64 when no backend is configured
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        if (typeof reader.result === "string") resolve(reader.result);
-        else reject(new Error("Failed to read image."));
-      });
-      reader.addEventListener("error", () => {
-        reject(reader.error ?? new Error("Failed to read image."));
-      });
-      reader.readAsDataURL(image);
-    });
-  }
-
-  const formData = new FormData();
-  formData.append("image", image);
-
-  // Retrieve cached PR number to associate image with the draft PR
-  const cached = localStorage.getItem("edit_pr_info");
-  if (cached) {
-    try {
-      const info = JSON.parse(cached);
-      if (info.prNumber) formData.append("pr_number", String(info.prNumber));
-      if (info.email) formData.append("email", info.email);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const res = await fetch(`${API_BASE}/api/upload`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Upload failed" }));
-    throw new Error(err.error ?? "Image upload failed");
-  }
-
-  const data = await res.json();
-  // Notify parent of uploaded image filename for PR change tracking
-  if (data.filename) {
-    window.dispatchEvent(
-      new CustomEvent("image-uploaded", {
-        detail: { filename: data.filename },
-      }),
-    );
-  }
-  return data.url;
 };
 
 function ImageUploadButton() {
@@ -135,8 +78,13 @@ function ImageUploadButton() {
 export default function MarkdownEditorClient({
   value,
   onChange,
+  onImageUploaded,
 }: MarkdownEditorClientProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
+  const onImageUploadedRef = useRef(onImageUploaded);
+
+  onImageUploadedRef.current = onImageUploaded;
+
   const editorLexicalTheme = useMemo(
     () => ({
       ...lexicalTheme,
@@ -187,7 +135,17 @@ export default function MarkdownEditorClient({
       thematicBreakPlugin(),
       linkPlugin(),
       linkDialogPlugin(),
-      imagePlugin({ imageUploadHandler }),
+      imagePlugin({
+        imageUploadHandler: async (image: File) => {
+          const result = await uploadEditorImage(image);
+
+          if (result.filename) {
+            onImageUploadedRef.current?.(result.filename);
+          }
+
+          return result.url;
+        },
+      }),
       markdownShortcutPlugin(),
       toolbarPlugin({
         toolbarContents: () => (
