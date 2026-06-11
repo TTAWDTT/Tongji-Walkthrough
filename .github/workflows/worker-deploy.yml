@@ -25,3 +25,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: workers/editor-backend
           command: deploy
+          secrets: |
+            GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.EDITOR_GITHUB_TOKEN }}
