@@ -1,6 +1,7 @@
 name = "tongji-walkthrough-editor-backend"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
+account_id = "4649ae4c1e95e4d4c94e27e19218ab03"
 
 # KV namespace for PR mapping storage
 [[kv_namespaces]]
