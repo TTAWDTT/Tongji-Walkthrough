@@ -16,7 +16,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import type { Env, PRMapping, ImageRecord } from "./types";
+import type { Env, PRMapping, ImageRecord, SubmitRequest } from "./types";
 import * as gh from "./github";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -211,8 +211,8 @@ async function createPR(
   if (!sn) sn = "user";
   const ts = new Date()
     .toISOString()
-    .replace(/[^0-9]/g, "")
-    .slice(0, 14);
+    .replace(/[:.Z-]/g, "")
+    .slice(0, 15);
   const branch = `edit/${sn}/${ts}`;
 
   // Create branch from main
@@ -313,17 +313,8 @@ async function createPR(
 // ── POST /api/draft ────────────────────────────────────────────────────
 
 app.post("/api/draft", async (c) => {
-  const { profile, changes } = (await c.req.json<{
-    profile: {
-      studentId: string;
-      name: string;
-      email: string;
-      qq?: string;
-      github?: string;
-    };
-    changes: Record<string, unknown>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }>()) as any;
+  const body = await c.req.json<SubmitRequest>();
+  const { profile, changes } = body;
 
   if (!profile || !changes)
     return c.json({ success: false, error: "Missing profile or changes" }, 400);
@@ -357,7 +348,8 @@ app.post("/api/draft", async (c) => {
 // ── POST /api/submit ───────────────────────────────────────────────────
 
 app.post("/api/submit", async (c) => {
-  const { profile, changes } = (await c.req.json()) as any;
+  const body = await c.req.json<SubmitRequest>();
+  const { profile, changes } = body;
   if (!profile || !changes)
     return c.json({ success: false, error: "Missing profile or changes" }, 400);
 
@@ -413,7 +405,11 @@ app.post("/api/update", async (c) => {
   if (!mapping)
     return c.json({ success: false, error: "PR not found in database" }, 404);
 
-  if (body.profile?.email && body.profile.email !== mapping.submitterEmail) {
+  // 必须传 email 且匹配提交者
+  if (!body.profile?.email) {
+    return c.json({ success: false, error: "Email required" }, 400);
+  }
+  if (body.profile.email !== mapping.submitterEmail) {
     return c.json({ success: false, error: "Email mismatch" }, 403);
   }
 

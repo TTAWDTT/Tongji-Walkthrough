@@ -36,15 +36,16 @@ async function githubApi(
 
 // ---- Repo Operations ----
 
-export async function getRef(env: Env, ref: string): Promise<{ sha: string }> {
+export async function getRef(
+  env: Env,
+  ref: string,
+): Promise<{ object: { sha: string } }> {
   const res = await githubApi(
     env,
     "GET",
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/git/ref/heads/${ref}`,
   );
-  return (await res.json()) as { object: { sha: string } } as unknown as {
-    sha: string;
-  };
+  return res.json();
 }
 
 export async function createBranch(
@@ -52,14 +53,13 @@ export async function createBranch(
   branchName: string,
 ): Promise<void> {
   const main = await getRef(env, env.GITHUB_BRANCH);
-  const mainData = main as unknown as { object: { sha: string } };
   await githubApi(
     env,
     "POST",
     `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/git/refs`,
     {
       ref: `refs/heads/${branchName}`,
-      sha: mainData.object.sha,
+      sha: main.object.sha,
     },
   );
 }
@@ -126,9 +126,11 @@ export async function writeFilesToBranch(
   created: Record<string, string>,
   deleted: string[],
 ): Promise<void> {
-  // Modified files: get sha from current branch or main, then overwrite
+  // Modified files: get sha from current branch, fallback to main, then overwrite
   for (const [filePath, content] of Object.entries(modified)) {
-    const existing = await getFileFromBranch(env, filePath, branch);
+    const existing =
+      (await getFileFromBranch(env, filePath, branch)) ??
+      (await getFileFromBranch(env, filePath, env.GITHUB_BRANCH));
     const sha = existing?.sha;
     await commitFileOnBranch(
       env,
