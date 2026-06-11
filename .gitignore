@@ -38,3 +38,7 @@ pnpm-lock.yaml
 yarn.lock
 package-lock.json
 bun.lockb
+
+# backend (PHP server for PR editing workflow)
+/backend/config.php
+/backend/temp/images/
