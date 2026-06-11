@@ -4,16 +4,27 @@ import path from "node:path";
 import { markdownToHtml } from "@/lib/markdown";
 
 export type DocNavItem = {
+  type: "page";
   title: string;
   slug: string;
   href: string;
   order: number;
 };
 
+export type DocNavFolder = {
+  type: "folder";
+  title: string;
+  slug: string;
+  order: number;
+  children: DocNavNode[];
+};
+
+export type DocNavNode = DocNavFolder | DocNavItem;
+
 export type DocPageData = DocNavItem & {
   contentHtml: string;
   description?: string;
-  navItems: DocNavItem[];
+  navItems: DocNavNode[];
 };
 
 export type DocSourceItem = DocNavItem & {
@@ -22,20 +33,7 @@ export type DocSourceItem = DocNavItem & {
 };
 
 const docsDirectory = path.join(process.cwd(), "content", "docs");
-
-const getMarkdownFiles = (directory: string): string[] => {
-  if (!fs.existsSync(directory)) return [];
-
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(directory, entry.name);
-
-    if (entry.isDirectory()) {
-      return getMarkdownFiles(entryPath);
-    }
-
-    return entry.isFile() && entry.name.endsWith(".md") ? [entryPath] : [];
-  });
-};
+const defaultOrder = 1000;
 
 const normalizeSlug = (filePath: string) =>
   path
@@ -75,6 +73,12 @@ const parseFrontmatter = (source: string) => {
   return { meta, body };
 };
 
+const parseOrder = (value: unknown) => {
+  const order = Number(value ?? defaultOrder);
+
+  return Number.isFinite(order) ? order : defaultOrder;
+};
+
 const getTitleFromBody = (body: string, fallback: string) => {
   const heading = body.match(/^#\s+(.+)$/m);
 
@@ -88,25 +92,129 @@ const readDocMeta = (
   const { meta, body } = parseFrontmatter(fs.readFileSync(filePath, "utf8"));
   const fallbackTitle = path.basename(slug).replace(/[-_]/g, " ");
   const title = meta.get("title") ?? getTitleFromBody(body, fallbackTitle);
-  const order = Number(meta.get("order") ?? 1000);
 
   return {
+    type: "page",
     title,
     slug,
     href: `/docs/${slug}`,
-    order: Number.isFinite(order) ? order : 1000,
+    order: parseOrder(meta.get("order")),
     description: meta.get("description"),
     body,
   };
 };
 
-export const getAllDocs = () =>
-  getMarkdownFiles(docsDirectory)
-    .map(readDocMeta)
-    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+const formatSegmentTitle = (segment: string) =>
+  segment
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const readFolderMeta = (
+  directory: string,
+  slug: string,
+): Pick<DocNavFolder, "title" | "order"> => {
+  const metaPath = path.join(directory, "_meta.json");
+  const fallbackTitle = formatSegmentTitle(path.basename(directory));
+
+  if (!fs.existsSync(metaPath)) {
+    return {
+      title: fallbackTitle,
+      order: defaultOrder,
+    };
+  }
+
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8")) as {
+      title?: unknown;
+      order?: unknown;
+    };
+
+    return {
+      title: typeof meta.title === "string" ? meta.title : fallbackTitle,
+      order: parseOrder(meta.order),
+    };
+  } catch {
+    return {
+      title: fallbackTitle || slug,
+      order: defaultOrder,
+    };
+  }
+};
+
+type DocRecord = DocNavItem & { body: string; description?: string };
+type DocTreeRecord = DocNavFolder | DocRecord;
+
+const sortNavNodes = <T extends { title: string; order: number }>(items: T[]) =>
+  items.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+
+const readDocTree = (
+  directory = docsDirectory,
+  slugPrefix = "",
+): DocTreeRecord[] => {
+  if (!fs.existsSync(directory)) return [];
+
+  const nodes = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap<DocTreeRecord>((entry) => {
+      const entryPath = path.join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        const slug = slugPrefix ? `${slugPrefix}/${entry.name}` : entry.name;
+        const children = readDocTree(entryPath, slug);
+        const meta = readFolderMeta(entryPath, slug);
+
+        return [
+          {
+            type: "folder",
+            title: meta.title,
+            slug,
+            order: meta.order,
+            children,
+          },
+        ];
+      }
+
+      if (!entry.isFile() || !entry.name.endsWith(".md")) return [];
+
+      return [readDocMeta(entryPath)];
+    });
+
+  return sortNavNodes(nodes);
+};
+
+const flattenDocs = (nodes: DocTreeRecord[]): DocRecord[] =>
+  nodes.flatMap((node) =>
+    node.type === "page"
+      ? [node]
+      : flattenDocs(node.children as DocTreeRecord[]),
+  );
+
+const toNavTree = (nodes: DocTreeRecord[]): DocNavNode[] =>
+  nodes.map((node) => {
+    if (node.type === "page") {
+      const { type, title, slug, href, order } = node;
+
+      return { type, title, slug, href, order };
+    }
+
+    return {
+      type: "folder",
+      title: node.title,
+      slug: node.slug,
+      order: node.order,
+      children: toNavTree(node.children as DocTreeRecord[]),
+    };
+  });
+
+export const getDocNavTree = () => toNavTree(readDocTree());
+
+export const getAllDocs = () => flattenDocs(readDocTree());
 
 export const getAllDocSources = (): DocSourceItem[] =>
-  getAllDocs().map(({ title, slug, href, order, description, body }) => ({
+  getAllDocs().map(({ type, title, slug, href, order, description, body }) => ({
+    type,
     title,
     slug,
     href,
@@ -133,16 +241,12 @@ export const getDocBySlug = (slug?: string | string[]): DocPageData | null => {
 
   return {
     title: doc.title,
+    type: doc.type,
     slug: doc.slug,
     href: doc.href,
     order: doc.order,
     description: doc.description,
     contentHtml: markdownToHtml(doc.body),
-    navItems: docs.map(({ title, slug, href, order }) => ({
-      title,
-      slug,
-      href,
-      order,
-    })),
+    navItems: getDocNavTree(),
   };
 };
