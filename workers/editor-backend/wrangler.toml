@@ -1,0 +1,28 @@
+name = "tongji-walkthrough-editor-backend"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# KV namespace for PR mapping storage
+[[kv_namespaces]]
+binding = "EDITOR_KV"
+id = "cca1784935014b00a7f588c650dbe6d7"
+
+# R2 bucket for image storage
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "tongji-walkthrough-images"
+
+# Plain-text config. Secrets (GITHUB_TOKEN, optional ADMIN_TOKEN) are set
+# separately via `wrangler secret put`.
+[vars]
+GITHUB_OWNER = "TTAWDTT"
+GITHUB_REPO = "Tongji-Walkthrough"
+GITHUB_BRANCH = "main"
+# Origin comparison is case-insensitive in code, but keep these lowercase.
+ALLOWED_ORIGINS = "https://tongji.one,https://ttawdtt.github.io,https://tongjione.yzxoi.top"
+# Public URL of this Worker, used to build image links.
+BASE_URL = "https://tongjione.yzxoi.top"
+
+# Cron for daily image cleanup
+[triggers]
+crons = ["0 3 * * *"]

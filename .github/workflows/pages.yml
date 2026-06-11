@@ -37,6 +37,8 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           GITHUB_PAGES_CUSTOM_DOMAIN: "true"
+          # 后端 API 地址 — 指向 Cloudflare Worker
+          API_BASE_URL: "https://tongjione.yzxoi.top"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

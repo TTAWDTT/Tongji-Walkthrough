@@ -27,33 +27,13 @@ import {
   usePublisher,
 } from "@mdxeditor/editor";
 
+import { uploadEditorImage } from "@/lib/editor-api";
+
 type MarkdownEditorClientProps = {
   value: string;
   onChange: (value: string) => void;
+  onImageUploaded?: (filename: string) => void;
 };
-
-const imageUploadHandler = (image: File) =>
-  new Promise<string>((resolve, reject) => {
-    if (!image.type.startsWith("image/")) {
-      reject(new Error("Only image files can be uploaded."));
-
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Failed to read image."));
-      }
-    });
-    reader.addEventListener("error", () => {
-      reject(reader.error ?? new Error("Failed to read image."));
-    });
-    reader.readAsDataURL(image);
-  });
 
 function ImageUploadButton() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -98,8 +78,13 @@ function ImageUploadButton() {
 export default function MarkdownEditorClient({
   value,
   onChange,
+  onImageUploaded,
 }: MarkdownEditorClientProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
+  const onImageUploadedRef = useRef(onImageUploaded);
+
+  onImageUploadedRef.current = onImageUploaded;
+
   const editorLexicalTheme = useMemo(
     () => ({
       ...lexicalTheme,
@@ -150,7 +135,17 @@ export default function MarkdownEditorClient({
       thematicBreakPlugin(),
       linkPlugin(),
       linkDialogPlugin(),
-      imagePlugin({ imageUploadHandler }),
+      imagePlugin({
+        imageUploadHandler: async (image: File) => {
+          const result = await uploadEditorImage(image);
+
+          if (result.filename) {
+            onImageUploadedRef.current?.(result.filename);
+          }
+
+          return result.url;
+        },
+      }),
       markdownShortcutPlugin(),
       toolbarPlugin({
         toolbarContents: () => (

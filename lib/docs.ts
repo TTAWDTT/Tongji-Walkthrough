@@ -29,6 +29,8 @@ export type DocPageData = DocNavItem & {
 
 export type DocSourceItem = DocNavItem & {
   content: string;
+  /** Raw frontmatter block (including `---` fences), "" when absent. */
+  frontmatter: string;
   description?: string;
 };
 
@@ -43,15 +45,16 @@ const normalizeSlug = (filePath: string) =>
 
 const parseFrontmatter = (source: string) => {
   if (!source.startsWith("---")) {
-    return { meta: new Map<string, string>(), body: source };
+    return { meta: new Map<string, string>(), body: source, raw: "" };
   }
 
   const end = source.indexOf("\n---", 3);
 
   if (end === -1) {
-    return { meta: new Map<string, string>(), body: source };
+    return { meta: new Map<string, string>(), body: source, raw: "" };
   }
 
+  const raw = source.slice(0, end + 4);
   const rawMeta = source.slice(3, end).trim();
   const body = source.slice(end + 4).trimStart();
   const meta = new Map<string, string>();
@@ -70,7 +73,7 @@ const parseFrontmatter = (source: string) => {
     meta.set(key, value);
   });
 
-  return { meta, body };
+  return { meta, body, raw };
 };
 
 const parseOrder = (value: unknown) => {
@@ -87,9 +90,11 @@ const getTitleFromBody = (body: string, fallback: string) => {
 
 const readDocMeta = (
   filePath: string,
-): DocNavItem & { body: string; description?: string } => {
+): DocNavItem & { body: string; frontmatter: string; description?: string } => {
   const slug = normalizeSlug(filePath);
-  const { meta, body } = parseFrontmatter(fs.readFileSync(filePath, "utf8"));
+  const { meta, body, raw } = parseFrontmatter(
+    fs.readFileSync(filePath, "utf8"),
+  );
   const fallbackTitle = path.basename(slug).replace(/[-_]/g, " ");
   const title = meta.get("title") ?? getTitleFromBody(body, fallbackTitle);
 
@@ -101,6 +106,7 @@ const readDocMeta = (
     order: parseOrder(meta.get("order")),
     description: meta.get("description"),
     body,
+    frontmatter: raw,
   };
 };
 
@@ -143,7 +149,11 @@ const readFolderMeta = (
   }
 };
 
-type DocRecord = DocNavItem & { body: string; description?: string };
+type DocRecord = DocNavItem & {
+  body: string;
+  frontmatter: string;
+  description?: string;
+};
 type DocTreeRecord = DocNavFolder | DocRecord;
 
 const sortNavNodes = <T extends { title: string; order: number }>(items: T[]) =>
@@ -213,15 +223,18 @@ export const getDocNavTree = () => toNavTree(readDocTree());
 export const getAllDocs = () => flattenDocs(readDocTree());
 
 export const getAllDocSources = (): DocSourceItem[] =>
-  getAllDocs().map(({ type, title, slug, href, order, description, body }) => ({
-    type,
-    title,
-    slug,
-    href,
-    order,
-    description,
-    content: body,
-  }));
+  getAllDocs().map(
+    ({ type, title, slug, href, order, description, body, frontmatter }) => ({
+      type,
+      title,
+      slug,
+      href,
+      order,
+      description,
+      content: body,
+      frontmatter,
+    }),
+  );
 
 export const getDocPaths = () =>
   getAllDocs().map((doc) => ({
