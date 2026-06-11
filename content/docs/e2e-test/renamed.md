@@ -1,0 +1,7 @@
+---
+title: Renamed
+---
+
+# Renamed
+
+updated
