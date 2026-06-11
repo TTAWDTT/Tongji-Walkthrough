@@ -176,16 +176,37 @@ app.get("/api/image", async (c) => {
     return c.json({ success: false, error: "Invalid image id" }, 400);
   }
 
+  // Tier 1: R2
   const obj = await c.env.IMAGES_BUCKET.get(`images/${id}`);
-  if (!obj) return c.json({ success: false, error: "Image not found" }, 404);
+  if (obj) {
+    return new Response(obj.body, {
+      headers: {
+        "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
+        "Cache-Control": "public, max-age=31536000",
+        "X-Source": "r2",
+      },
+    });
+  }
 
-  return new Response(obj.body, {
-    headers: {
-      "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
-      "Cache-Control": "public, max-age=31536000",
-      "X-Source": "r2",
-    },
-  });
+  // Tier 2: fallback to GitHub raw (main branch — image was merged)
+  const rawUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_OWNER}/${c.env.GITHUB_REPO}/main/public/images/${id}`;
+  try {
+    const ghResp = await fetch(rawUrl);
+    if (ghResp.ok) {
+      const buf = await ghResp.arrayBuffer();
+      return new Response(buf, {
+        headers: {
+          "Content-Type": ghResp.headers.get("content-type") || "image/jpeg",
+          "Cache-Control": "public, max-age=31536000",
+          "X-Source": "github-raw",
+        },
+      });
+    }
+  } catch {
+    /* fallback failed */
+  }
+
+  return c.json({ success: false, error: "Image not found" }, 404);
 });
 
 // ── PR Creation Helper (shared by draft & submit) ──────────────────────
@@ -590,7 +611,6 @@ app.get("/api/history", async (c) => {
 });
 
 // ── GET /api/cleanup (also from CRON) ──────────────────────────────────
-
 const CLEANUP_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
 async function runCleanup(
@@ -608,11 +628,26 @@ async function runCleanup(
         key.name,
         "json",
       )) as ImageRecord | null;
-      if (rec && !rec.prNumber && rec.createdAt < cutoff) {
+      if (!rec) continue;
+
+      // Case 1: Orphan — no PR, older than 24h
+      if (!rec.prNumber && rec.createdAt < cutoff) {
         await env.IMAGES_BUCKET.delete(`images/${rec.filename}`);
         await env.EDITOR_KV.delete(key.name);
         files++;
         records++;
+        continue;
+      }
+
+      // Case 2: PR merged — image is safe on main, delete from R2
+      if (rec.prNumber && rec.branchCommitted) {
+        const pr = await getPR(env, rec.prNumber);
+        if (pr && pr.prStatus === "merged") {
+          await env.IMAGES_BUCKET.delete(`images/${rec.filename}`);
+          await env.EDITOR_KV.delete(key.name);
+          files++;
+          records++;
+        }
       }
     }
     cursor = result.cursor;
