@@ -116,7 +116,9 @@ function createPR(string $title, string $body, string $branchName, bool $draft =
 }
 
 function markPRReady(int $prNumber): void {
-    githubApi('POST', '/repos/' . GITHUB_OWNER . '/' . GITHUB_REPO . '/pulls/' . $prNumber . '/ready_for_review');
+    githubApi('PATCH', '/repos/' . GITHUB_OWNER . '/' . GITHUB_REPO . '/pulls/' . $prNumber, [
+        'draft' => false,
+    ]);
 }
 
 function getPR(int $prNumber): array {
