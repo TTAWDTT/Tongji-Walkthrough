@@ -611,12 +611,6 @@ export function EditDocsLayout({
     firstPageId,
   );
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragHoverId, setDragHoverId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
-  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
-  const [profile, setProfile] = useState<Profile>(defaultProfile);
   const hoverTimer = useRef<number | null>(null);
   const pendingAutoExpandId = useRef<string | null>(null);
   const autoExpandedIds = useRef<Set<string>>(new Set());
@@ -633,30 +627,32 @@ export function EditDocsLayout({
 
   const PR_CACHE_KEY = "edit_pr_info";
 
-  const getCachedPR = (): {
+  // Issue 3 fix: read localStorage only after mount (avoid SSR ReferenceError)
+  const [cachedPR, setCachedPRState] = useState<{
     prNumber: number;
     type: string;
     email: string;
-  } | null => {
+  } | null>(null);
+
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(PR_CACHE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) setCachedPRState(JSON.parse(raw));
     } catch {
-      return null;
+      /* ignore */
     }
-  };
+  }, []);
 
   const setCachedPR = (prNumber: number, type: string, email: string) => {
-    localStorage.setItem(
-      PR_CACHE_KEY,
-      JSON.stringify({ prNumber, type, email }),
-    );
+    const val = { prNumber, type, email };
+    localStorage.setItem(PR_CACHE_KEY, JSON.stringify(val));
+    setCachedPRState(val);
   };
 
   const clearCachedPR = () => {
     localStorage.removeItem(PR_CACHE_KEY);
+    setCachedPRState(null);
   };
-
   // Build a minimal diff from the initial contents
   const buildChanges = () => {
     const modified: Record<string, string> = {};
@@ -747,7 +743,6 @@ export function EditDocsLayout({
 
   const submitToBackend = async (mode: "draft" | "ready") => {
     const changes = buildChanges();
-    const cachedPR = getCachedPR();
 
     // Check if PR cache belongs to the same user
     const sameUser = cachedPR && cachedPR.email === profile.email;
@@ -1066,9 +1061,9 @@ export function EditDocsLayout({
         </div>
         <div className="flex items-center justify-end gap-2">
           <NavbarActions basePath={basePath} className="hidden sm:flex" />
-          {getCachedPR() && (
+          {cachedPR && (
             <span className="hidden text-xs text-amber-500 sm:inline">
-              Draft #{getCachedPR()?.prNumber}
+              Draft #{cachedPR.prNumber}
             </span>
           )}
           <Button
@@ -1224,12 +1219,13 @@ export function EditDocsLayout({
                   <Modal.CloseTrigger />
                 </Modal.Header>
                 <Modal.Body className="grid gap-4">
-                  {getCachedPR() && (
+                  {cachedPR && (
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
-                      已有暂存 PR #{getCachedPR()?.prNumber}。暂存将更新该
+                      已有暂存 PR #{cachedPR.prNumber}。暂存将更新该
                       PR，正式提交将转为 Ready 状态。
                     </div>
                   )}
+
                   {submitError && (
                     <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
                       提交失败：{submitError}
@@ -1293,7 +1289,7 @@ export function EditDocsLayout({
                   >
                     {isSubmitting
                       ? "提交中..."
-                      : getCachedPR()
+                      : cachedPR
                         ? "更新暂存"
                         : "暂存 (Draft PR)"}
                   </Button>

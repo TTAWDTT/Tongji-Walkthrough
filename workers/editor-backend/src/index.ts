@@ -1,18 +1,3 @@
-/**
- * Tongji-Walkthrough 编辑器后端 - Cloudflare Worker
- *
- * 整个后端运行在 Cloudflare Workers 上，无需 MySQL/本地存储。
- * - KV: 存储 PR 映射关系 + 图片元数据（替代 MySQL）
- * - R2: 存储上传的图片（替代本地文件系统）
- * - GitHub API: 操作仓库（创建分支、提交文件、管理 PR）
- *
- * Deploy:
- *   1. npm install && npm run deploy:kv（创建 KV 命名空间，ID 填入 wrangler.toml）
- *   2. 在 CF Dashboard 创建 R2 存储桶 tongji-walkthrough-images
- *   3. wrangler secret put GITHUB_TOKEN
- *   4. wrangler deploy
- */
-
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
@@ -20,8 +5,6 @@ import type { Env, PRMapping, ImageRecord, SubmitRequest } from "./types";
 import * as gh from "./github";
 
 const app = new Hono<{ Bindings: Env }>();
-
-// ─── CORS ───────────────────────────────────────────────────────────────
 
 app.use(
   "*",
@@ -36,33 +19,25 @@ app.use(
   }),
 );
 
-// ─── KV Helpers ────────────────────────────────────────────────────────
-
 const KV_PR = "pr:";
 const KV_IMG = "img:";
 
 async function getPR(env: Env, n: number): Promise<PRMapping | null> {
   return (await env.EDITOR_KV.get(`${KV_PR}${n}`, "json")) as PRMapping | null;
 }
-
 async function setPR(env: Env, n: number, m: PRMapping): Promise<void> {
   await env.EDITOR_KV.put(`${KV_PR}${n}`, JSON.stringify(m));
 }
-
 async function getImg(env: Env, f: string): Promise<ImageRecord | null> {
   return (await env.EDITOR_KV.get(
     `${KV_IMG}${f}`,
     "json",
   )) as ImageRecord | null;
 }
-
 async function setImg(env: Env, f: string, r: ImageRecord): Promise<void> {
   await env.EDITOR_KV.put(`${KV_IMG}${f}`, JSON.stringify(r));
 }
 
-// ─── Routes ────────────────────────────────────────────────────────────
-
-// Health
 app.get("/", (c) =>
   c.json({
     success: true,
@@ -71,15 +46,12 @@ app.get("/", (c) =>
   }),
 );
 
-// ── GET /api/content ───────────────────────────────────────────────────
-
 app.get("/api/content", async (c) => {
   const path = c.req.query("path");
   const ref = c.req.query("ref") || c.env.GITHUB_BRANCH;
   if (!path) return c.json({ success: false, error: "Missing path" }, 400);
   if (path.includes(".."))
     return c.json({ success: false, error: "Invalid path" }, 400);
-
   try {
     const r = await gh.getFileContent(c.env, path, ref);
     if (!r) return c.json({ success: false, error: "File not found" }, 404);
@@ -89,43 +61,31 @@ app.get("/api/content", async (c) => {
   }
 });
 
-// ── POST /api/upload ───────────────────────────────────────────────────
-
 app.post("/api/upload", async (c) => {
   const fd = await c.req.formData();
   const file = fd.get("image") as File | null;
   if (!file) return c.json({ success: false, error: "No image uploaded" }, 400);
-
   const allowedMimes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  if (!allowedMimes.includes(file.type)) {
+  if (!allowedMimes.includes(file.type))
     return c.json({ success: false, error: "Invalid image type" }, 400);
-  }
-  if (file.size > 5 * 1024 * 1024) {
+  if (file.size > 5 * 1024 * 1024)
     return c.json({ success: false, error: "File too large (max 5MB)" }, 400);
-  }
-
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const allowedExts = ["jpg", "jpeg", "png", "gif", "webp"];
-  if (!allowedExts.includes(ext)) {
+  if (!allowedExts.includes(ext))
     return c.json({ success: false, error: "Invalid file extension" }, 400);
-  }
 
-  // Unique filename: time_hash(random32).ext
   const uniqueName = `upload_${Date.now().toString(16)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}.${ext}`;
-
-  // Store in R2
   const buf = await file.arrayBuffer();
   await c.env.IMAGES_BUCKET.put(`images/${uniqueName}`, buf, {
     httpMetadata: { contentType: file.type },
     customMetadata: { originalName: file.name },
   });
 
-  // If pr_number provided, write to GitHub branch
   const prRaw = fd.get("pr_number");
   const prNumber = prRaw ? parseInt(prRaw as string, 10) : undefined;
   const email = (fd.get("email") as string) || undefined;
   let branchCommitted = false;
-
   if (prNumber) {
     const pr = await getPR(c.env, prNumber);
     if (pr && pr.prStatus === "open") {
@@ -143,7 +103,6 @@ app.post("/api/upload", async (c) => {
     }
   }
 
-  // Record in KV
   await setImg(c.env, uniqueName, {
     filename: uniqueName,
     originalName: file.name,
@@ -157,7 +116,6 @@ app.post("/api/upload", async (c) => {
 
   const imageUrl = `${c.env.BASE_URL}/api/image?id=${encodeURIComponent(uniqueName)}`;
   const title = file.name.replace(/\.[^.]+$/, "");
-
   return c.json({
     success: true,
     filename: uniqueName,
@@ -168,15 +126,10 @@ app.post("/api/upload", async (c) => {
   });
 });
 
-// ── GET /api/image ─────────────────────────────────────────────────────
-
 app.get("/api/image", async (c) => {
   const id = c.req.query("id") || "";
-  if (!id || /[^a-zA-Z0-9._-]/.test(id)) {
+  if (!id || /[^a-zA-Z0-9._-]/.test(id))
     return c.json({ success: false, error: "Invalid image id" }, 400);
-  }
-
-  // Tier 1: R2
   const obj = await c.env.IMAGES_BUCKET.get(`images/${id}`);
   if (obj) {
     return new Response(obj.body, {
@@ -187,8 +140,6 @@ app.get("/api/image", async (c) => {
       },
     });
   }
-
-  // Tier 2: fallback to GitHub raw (main branch — image was merged)
   const rawUrl = `https://raw.githubusercontent.com/${c.env.GITHUB_OWNER}/${c.env.GITHUB_REPO}/main/public/images/${id}`;
   try {
     const ghResp = await fetch(rawUrl);
@@ -205,11 +156,8 @@ app.get("/api/image", async (c) => {
   } catch {
     /* fallback failed */
   }
-
   return c.json({ success: false, error: "Image not found" }, 404);
 });
-
-// ── PR Creation Helper (shared by draft & submit) ──────────────────────
 
 async function createPR(
   env: Env,
@@ -228,7 +176,6 @@ async function createPR(
   },
   isDraft: boolean,
 ): Promise<{ prNumber: number; prUrl: string; branch: string }> {
-  // Branch name
   let sn = profile.name.replace(/ /g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
   if (!sn) sn = "user";
   const ts = new Date()
@@ -237,10 +184,7 @@ async function createPR(
     .slice(0, 15);
   const branch = `edit/${sn}/${ts}`;
 
-  // Create branch from main
   await gh.createBranch(env, branch);
-
-  // Write files to branch
   await gh.writeFilesToBranch(
     env,
     branch,
@@ -248,8 +192,14 @@ async function createPR(
     changes.created || {},
     changes.deleted || [],
   );
+  // Issue 2 fix: clean orphan files (handles renames)
+  await gh.cleanBranchFiles(
+    env,
+    branch,
+    changes.modified || {},
+    changes.created || {},
+  );
 
-  // Copy images from R2 to branch
   for (const img of changes.images || []) {
     const fn =
       typeof img === "string"
@@ -259,46 +209,34 @@ async function createPR(
     const obj = await env.IMAGES_BUCKET.get(`images/${fn}`);
     if (obj) {
       try {
-        const buf = await obj.arrayBuffer();
-        await gh.uploadImageToBranch(env, branch, `public/images/${fn}`, buf);
+        const b = await obj.arrayBuffer();
+        await gh.uploadImageToBranch(env, branch, `public/images/${fn}`, b);
       } catch {
         /* non-blocking */
       }
     }
   }
 
-  // PR title & body
   const mc = Object.keys(changes.modified || {}).length;
   const cc = Object.keys(changes.created || {}).length;
   const dc = (changes.deleted || []).length;
   const ic = (changes.images || []).length;
-
   const prefix = isDraft ? "[暂存]" : "[编辑]";
   const parts: string[] = [];
   if (mc > 0) parts.push(`修改 ${mc} 个文档`);
   if (cc > 0) parts.push(`新增 ${cc} 个文档`);
   if (dc > 0) parts.push(`删除 ${dc} 个文档`);
   if (ic > 0) parts.push(`新增 ${ic} 张图片`);
-
   const title = `${prefix} ${profile.name} - ${parts.join("，")}`;
   const body =
-    `由 Tongji-Walkthrough 编辑平台${isDraft ? " (暂存)" : ""}提交\n\n` +
-    `## 提交者信息\n` +
-    `- **学号**: ${profile.studentId}\n` +
-    `- **姓名**: ${profile.name}\n` +
-    `- **邮箱**: ${profile.email}\n` +
+    `由 Tongji-Walkthrough 编辑平台${isDraft ? " (暂存)" : ""}提交\n\n## 提交者信息\n- **学号**: ${profile.studentId}\n- **姓名**: ${profile.name}\n- **邮箱**: ${profile.email}\n` +
     (profile.qq ? `- **QQ**: ${profile.qq}\n` : "") +
     (profile.github ? `- **GitHub**: @${profile.github}\n` : "") +
-    `\n## 变更摘要\n` +
-    `- 修改文件: ${mc} 个\n- 新增文件: ${cc} 个\n- 删除文件: ${dc} 个\n- 新增图片: ${ic} 个\n` +
-    (isDraft
-      ? `\n> 此 PR 为暂存版本 (Draft)。提交者后续可通过编辑平台继续更新内容。\n`
-      : "\n---\n") +
+    `\n## 变更摘要\n- 修改文件: ${mc} 个\n- 新增文件: ${cc} 个\n- 删除文件: ${dc} 个\n- 新增图片: ${ic} 个\n` +
+    (isDraft ? `\n> 此 PR 为暂存版本 (Draft)。\n` : "\n---\n") +
     `_此 PR 通过 Tongji-Walkthrough 编辑器自动生成_`;
 
   const pr = await gh.createPR(env, title, body, branch, isDraft);
-
-  // Store mapping in KV
   const now = new Date().toISOString();
   await setPR(env, pr.number, {
     prNumber: pr.number,
@@ -314,7 +252,7 @@ async function createPR(
     updatedAt: now,
   });
 
-  // Update image PR associations
+  // Issue 4 fix: only mark branchCommitted if upload actually succeeded
   for (const img of changes.images || []) {
     const fn =
       typeof img === "string"
@@ -322,25 +260,32 @@ async function createPR(
         : (img as { local_filename: string }).local_filename;
     if (!fn) continue;
     const rec = await getImg(env, fn);
-    if (rec) {
-      rec.prNumber = pr.number;
+    if (!rec) continue;
+    if (rec.prNumber) {
       rec.branchCommitted = true;
-      await setImg(env, fn, rec);
+    } else {
+      try {
+        rec.branchCommitted = await gh.getFileContentPublic(
+          env,
+          `public/images/${fn}`,
+          branch,
+        );
+      } catch {
+        rec.branchCommitted = false;
+      }
     }
+    rec.prNumber = pr.number;
+    await setImg(env, fn, rec);
   }
 
   return { prNumber: pr.number, prUrl: pr.html_url, branch };
 }
 
-// ── POST /api/draft ────────────────────────────────────────────────────
-
 app.post("/api/draft", async (c) => {
   const body = await c.req.json<SubmitRequest>();
   const { profile, changes } = body;
-
   if (!profile || !changes)
     return c.json({ success: false, error: "Missing profile or changes" }, 400);
-
   const errs: string[] = [];
   if (!profile.studentId) errs.push("Missing studentId");
   if (!profile.name) errs.push("Missing name");
@@ -352,7 +297,6 @@ app.post("/api/draft", async (c) => {
       { success: false, error: "Validation failed", details: errs },
       400,
     );
-
   try {
     const r = await createPR(c.env, profile, changes, true);
     return c.json({
@@ -367,14 +311,11 @@ app.post("/api/draft", async (c) => {
   }
 });
 
-// ── POST /api/submit ───────────────────────────────────────────────────
-
 app.post("/api/submit", async (c) => {
   const body = await c.req.json<SubmitRequest>();
   const { profile, changes } = body;
   if (!profile || !changes)
     return c.json({ success: false, error: "Missing profile or changes" }, 400);
-
   const errs: string[] = [];
   if (!profile.studentId) errs.push("Missing studentId");
   if (!profile.name) errs.push("Missing name");
@@ -386,7 +327,6 @@ app.post("/api/submit", async (c) => {
       { success: false, error: "Validation failed", details: errs },
       400,
     );
-
   try {
     const r = await createPR(c.env, profile, changes, false);
     return c.json({
@@ -401,8 +341,6 @@ app.post("/api/submit", async (c) => {
   }
 });
 
-// ── POST /api/update ───────────────────────────────────────────────────
-
 app.post("/api/update", async (c) => {
   const body = (await c.req.json()) as {
     prNumber: number;
@@ -415,35 +353,26 @@ app.post("/api/update", async (c) => {
       images?: (string | { local_filename: string })[];
     };
   };
-
-  if (!body.prNumber || !body.changes) {
+  if (!body.prNumber || !body.changes)
     return c.json(
       { success: false, error: "Missing pr_number or changes" },
       400,
     );
-  }
-
   const mapping = await getPR(c.env, body.prNumber);
   if (!mapping)
     return c.json({ success: false, error: "PR not found in database" }, 404);
-
-  // 必须传 email 且匹配提交者
-  if (!body.profile?.email) {
+  if (!body.profile?.email)
     return c.json({ success: false, error: "Email required" }, 400);
-  }
-  if (body.profile.email !== mapping.submitterEmail) {
+  if (body.profile.email !== mapping.submitterEmail)
     return c.json({ success: false, error: "Email mismatch" }, 403);
-  }
 
-  // Check PR state
   try {
     const pr = await gh.getPR(c.env, body.prNumber);
-    if (pr.state !== "open") {
+    if (pr.state !== "open")
       return c.json(
         { success: false, error: `PR is not open (state: ${pr.state})` },
         409,
       );
-    }
   } catch (e: unknown) {
     return c.json(
       { success: false, error: "Failed to check PR: " + (e as Error).message },
@@ -451,10 +380,6 @@ app.post("/api/update", async (c) => {
     );
   }
 
-  // --- Write files to existing branch ---
-  // For update, we assume the client sends the complete desired state.
-  // Files in 'modified' are overwritten; 'created' first checks if file
-  // already exists on branch (from a prior draft update) and uses the sha.
   try {
     await gh.writeFilesToBranch(
       c.env,
@@ -462,10 +387,16 @@ app.post("/api/update", async (c) => {
       body.changes.modified || {},
       body.changes.created || {},
       body.changes.deleted || [],
-      true, // checkCreatedOnBranch: try branch sha first
+      true,
+    );
+    // Issue 2 fix: clean orphan files
+    await gh.cleanBranchFiles(
+      c.env,
+      mapping.branchName,
+      body.changes.modified || {},
+      body.changes.created || {},
     );
 
-    // Handle images from R2
     for (const img of body.changes.images || []) {
       const fn =
         typeof img === "string"
@@ -475,12 +406,12 @@ app.post("/api/update", async (c) => {
       const obj = await c.env.IMAGES_BUCKET.get(`images/${fn}`);
       if (obj) {
         try {
-          const buf = await obj.arrayBuffer();
+          const b = await obj.arrayBuffer();
           await gh.uploadImageToBranch(
             c.env,
             mapping.branchName,
             `public/images/${fn}`,
-            buf,
+            b,
           );
         } catch {
           /* non-blocking */
@@ -489,7 +420,15 @@ app.post("/api/update", async (c) => {
       const rec = await getImg(c.env, fn);
       if (rec) {
         rec.prNumber = body.prNumber;
-        rec.branchCommitted = true;
+        try {
+          rec.branchCommitted = await gh.getFileContentPublic(
+            c.env,
+            `public/images/${fn}`,
+            mapping.branchName,
+          );
+        } catch {
+          rec.branchCommitted = false;
+        }
         await setImg(c.env, fn, rec);
       }
     }
@@ -500,8 +439,9 @@ app.post("/api/update", async (c) => {
     );
   }
 
-  // Promote if requested
+  // Issue 1 fix: don't swallow promote errors, return promoteFailed flag
   let converted = false;
+  let promoteFailed = false;
   if (body.promote && mapping.prType === "draft") {
     try {
       await gh.markPRReady(c.env, body.prNumber);
@@ -510,39 +450,36 @@ app.post("/api/update", async (c) => {
       mapping.updatedAt = new Date().toISOString();
       await setPR(c.env, body.prNumber, mapping);
     } catch {
-      /* non-blocking */
+      promoteFailed = true;
     }
   }
 
+  // Issue 5 fix: return prUrl
   return c.json({
     success: true,
     prNumber: body.prNumber,
+    prUrl: `https://github.com/${c.env.GITHUB_OWNER}/${c.env.GITHUB_REPO}/pull/${body.prNumber}`,
     branch: mapping.branchName,
     converted,
+    promoteFailed,
     prType: converted ? "ready" : mapping.prType,
   });
 });
 
-// ── GET /api/pr-status ─────────────────────────────────────────────────
-
 app.get("/api/pr-status", async (c) => {
   const pn = parseInt(c.req.query("pr_number") || "0", 10);
   if (!pn) return c.json({ success: false, error: "Invalid pr_number" }, 400);
-
   const local = await getPR(c.env, pn);
-
   try {
     const pr = await gh.getPR(c.env, pn);
     let ls = "open";
     if (pr.merged) ls = "merged";
     else if (pr.state === "closed") ls = "closed";
-
     if (local && ls !== local.prStatus) {
       local.prStatus = ls as PRMapping["prStatus"];
       local.updatedAt = new Date().toISOString();
       await setPR(c.env, pn, local);
     }
-
     return c.json({
       success: true,
       prNumber: pn,
@@ -566,8 +503,6 @@ app.get("/api/pr-status", async (c) => {
   }
 });
 
-// ── GET /api/history ───────────────────────────────────────────────────
-
 app.get("/api/history", async (c) => {
   const email = c.req.query("email");
   const studentId = c.req.query("student_id");
@@ -576,10 +511,8 @@ app.get("/api/history", async (c) => {
       { success: false, error: "Missing email or student_id" },
       400,
     );
-
   const records: PRMapping[] = [];
   let cursor: string | undefined;
-
   do {
     const result = await c.env.EDITOR_KV.list({ prefix: KV_PR, cursor });
     for (const key of result.keys) {
@@ -605,22 +538,18 @@ app.get("/api/history", async (c) => {
     }
     cursor = result.cursor;
   } while (cursor);
-
   records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return c.json({ success: true, records: records.slice(0, 50) });
 });
 
-// ── GET /api/cleanup (also from CRON) ──────────────────────────────────
 const CLEANUP_CUTOFF_MS = 24 * 60 * 60 * 1000;
-
 async function runCleanup(
   env: Env,
 ): Promise<{ files: number; records: number }> {
   const cutoff = new Date(Date.now() - CLEANUP_CUTOFF_MS).toISOString();
-  let files = 0;
-  let records = 0;
-  let cursor: string | undefined;
-
+  let files = 0,
+    records = 0,
+    cursor: string | undefined;
   do {
     const result = await env.EDITOR_KV.list({ prefix: KV_IMG, cursor });
     for (const key of result.keys) {
@@ -629,8 +558,6 @@ async function runCleanup(
         "json",
       )) as ImageRecord | null;
       if (!rec) continue;
-
-      // Case 1: Orphan — no PR, older than 24h
       if (!rec.prNumber && rec.createdAt < cutoff) {
         await env.IMAGES_BUCKET.delete(`images/${rec.filename}`);
         await env.EDITOR_KV.delete(key.name);
@@ -638,8 +565,6 @@ async function runCleanup(
         records++;
         continue;
       }
-
-      // Case 2: PR merged — image is safe on main, delete from R2
       if (rec.prNumber && rec.branchCommitted) {
         const pr = await getPR(env, rec.prNumber);
         if (pr && pr.prStatus === "merged") {
@@ -652,17 +577,16 @@ async function runCleanup(
     }
     cursor = result.cursor;
   } while (cursor);
-
   return { files, records };
 }
-
 app.get("/api/cleanup", async (c) => {
   const cleaned = await runCleanup(c.env);
-  const cutoff = new Date(Date.now() - CLEANUP_CUTOFF_MS).toISOString();
-  return c.json({ success: true, cleaned, cutoff });
+  return c.json({
+    success: true,
+    cleaned,
+    cutoff: new Date(Date.now() - CLEANUP_CUTOFF_MS).toISOString(),
+  });
 });
-
-// ── CRON Scheduler ─────────────────────────────────────────────────────
 
 export default {
   fetch: app.fetch,

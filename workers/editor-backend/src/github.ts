@@ -203,6 +203,118 @@ export async function getFileContent(
 ): Promise<{ content: string; sha: string } | null> {
   return getFileFromBranch(env, path, ref);
 }
+// List all .md files under content/docs/ on a branch
+export async function listDocFiles(
+  env: Env,
+  branch: string,
+): Promise<string[]> {
+  try {
+    const res = await githubApi(
+      env,
+      "GET",
+      `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/content/docs?ref=${branch}`,
+    );
+    const items = (await res.json()) as {
+      name: string;
+      type: string;
+      path: string;
+    }[];
+    const files: string[] = [];
+    for (const item of items) {
+      if (item.type === "file" && item.name.endsWith(".md")) {
+        files.push(item.path);
+      } else if (item.type === "dir") {
+        const subDir = await listDirFiles(
+          env,
+          branch,
+          `content/docs/${item.name}`,
+        );
+        files.push(...subDir);
+      }
+    }
+    return files;
+  } catch {
+    return []; // directory may not exist yet
+  }
+}
+
+// Recursively list .md files in a subdirectory
+async function listDirFiles(
+  env: Env,
+  branch: string,
+  dirPath: string,
+): Promise<string[]> {
+  try {
+    const res = await githubApi(
+      env,
+      "GET",
+      `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/${dirPath}?ref=${branch}`,
+    );
+    const items = (await res.json()) as {
+      name: string;
+      type: string;
+      path: string;
+    }[];
+    const files: string[] = [];
+    for (const item of items) {
+      if (item.type === "file" && item.name.endsWith(".md")) {
+        files.push(item.path);
+      } else if (item.type === "dir") {
+        const subDir = await listDirFiles(env, branch, item.path);
+        files.push(...subDir);
+      }
+    }
+    return files;
+  } catch {
+    return [];
+  }
+}
+
+// Clean up files on the branch that are NOT in modified or created
+// This handles cases like: rename draft page (old slug not sent in deleted)
+export async function cleanBranchFiles(
+  env: Env,
+  branch: string,
+  modified: Record<string, string>,
+  created: Record<string, string>,
+): Promise<void> {
+  const kept = new Set(Object.keys(modified));
+  for (const p of Object.keys(created)) kept.add(p);
+
+  const onBranch = await listDocFiles(env, branch);
+  for (const filePath of onBranch) {
+    if (!kept.has(filePath)) {
+      const existing = await getFileFromBranch(env, filePath, branch);
+      if (existing) {
+        try {
+          await githubApi(
+            env,
+            "DELETE",
+            `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/${filePath}`,
+            {
+              branch,
+              message: `[清理] Remove ${filePath.split("/").pop()}`,
+              sha: existing.sha,
+            },
+          );
+          await sleep(200);
+        } catch {
+          /* non-blocking — file may already have been deleted */
+        }
+      }
+    }
+  }
+}
+
+// Check if a file exists on a branch (used to verify successful image upload)
+export async function getFileContentPublic(
+  env: Env,
+  path: string,
+  branch: string,
+): Promise<boolean> {
+  const r = await getFileFromBranch(env, path, branch);
+  return r !== null;
+}
 
 export async function uploadImageToBranch(
   env: Env,
