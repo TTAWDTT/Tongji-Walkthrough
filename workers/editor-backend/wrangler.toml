@@ -3,25 +3,21 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
 # KV namespace for PR mapping storage
-# Create with: wrangler kv namespace create EDITOR_KV
-# Then paste the ID here:
 [[kv_namespaces]]
 binding = "EDITOR_KV"
-id = ""  # ← fill after `npm run deploy:kv`
+id = "cca1784935014b00a7f588c650dbe6d7"
 
 # R2 bucket for image storage
-# Create with: wrangler r2 bucket create tongji-walkthrough-images
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
 bucket_name = "tongji-walkthrough-images"
 
-# Secret environment variables (set via `wrangler secret put GITHUB_TOKEN`)
+# Secret environment variables (set via `wrangler secret put`)
 [vars]
 GITHUB_OWNER = "TTAWDTT"
 GITHUB_REPO = "Tongji-Walkthrough"
 GITHUB_BRANCH = "main"
-ALLOWED_ORIGINS = "https://tongji.one,https://TTAWDTT.github.io"
-BASE_URL = "https://tongji-walkthrough-editor-backend.YOUR-SUBDOMAIN.workers.dev"
+ALLOWED_ORIGINS = "https://tongji.one,https://TTAWDTT.github.io,https://tongjione.yzxoi.top"
 
 # Cron for daily image cleanup
 [triggers]

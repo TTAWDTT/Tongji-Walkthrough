@@ -30,7 +30,9 @@
 | 费用        | 免费                      | 免费（10万请求/天 + 1GB R2） |
 | CRON        | 需虚拟主机 cron 功能      | Worker 内建 Cron Triggers    |
 
-## 部署步骤
+## 部署步骤（一次性初始化）
+
+以下步骤只需要做一次。后续更新代码后，`git push` 会自动触发 CI 部署。
 
 ### 第 1 步：安装 Wrangler CLI
 
@@ -38,6 +40,203 @@
 cd workers/editor-backend
 npm install
 ```
+
+### 第 2 步：创建 KV 命名空间
+
+```bash
+npx wrangler kv namespace create EDITOR_KV
+```
+
+输出：
+
+```
+🌀 Creating namespace with title "tongji-walkthrough-editor-backend-EDITOR_KV"
+✨ Success!
+Add the following to your wrangler.toml:
+
+[[kv_namespaces]]
+binding = "EDITOR_KV"
+id = "abc123..."
+```
+
+将输出的 `id` 复制到 `wrangler.toml` 中。
+
+### 第 3 步：创建 R2 存储桶
+
+先到 Cloudflare Dashboard → R2 → 启用 R2（免费计划），然后：
+
+```bash
+npx wrangler r2 bucket create tongji-walkthrough-images
+```
+
+### 第 4 步：配置 GitHub Token
+
+```bash
+npx wrangler secret put GITHUB_TOKEN
+```
+
+填入 Fine-grained PAT（仓库 `TTAWDTT/Tongji-Walkthrough`，权限 `Contents: write` + `Pull requests: write`）。
+
+### 第 5 步：配置 BASE_URL
+
+```bash
+npx wrangler secret put BASE_URL
+```
+
+填入自定义域名：
+
+```
+https://tongjione.yzxoi.top
+```
+
+### 第 6 步：绑定自定义域名
+
+Cloudflare Dashboard → Workers & Pages → `tongji-walkthrough-editor-backend` → Triggers → Custom Domains → Add Custom Domain → 输入 `tongjione.yzxoi.top`
+
+### 第 7 步：首次手动部署
+
+```bash
+npx wrangler deploy
+```
+
+### 第 8 步：配置 GitHub Secret（CI 自动部署）
+
+在 GitHub 仓库设置中添加 Secret：
+
+- **Settings → Secrets and variables → Actions → New repository secret**
+- **Name**: `CLOUDFLARE_API_TOKEN`
+- **Value**: 你的 Cloudflare API Token（以 `cfut_` 开头）
+
+之后每次推送 `workers/editor-backend/**` 的修改到 `main` 分支，GitHub Actions 会自动部署 Worker。无需手动操作。
+
+## GitHub Token 配置
+
+### 生成 Fine-grained PAT
+
+1. 打开 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Generate new token
+3. **Token name**: `Tongji-Walkthrough Editor Backend`
+4. **Repository access**: Only select repositories → `TTAWDTT/Tongji-Walkthrough`
+5. **Permissions**:
+   - Contents: **Read and write**
+   - Pull requests: **Read and write**
+6. Generate → 复制 token（以 `github_pat_` 开头）
+
+### 存入 Worker
+
+```bash
+npx wrangler secret put GITHUB_TOKEN
+# → 粘贴 token
+```
+
+## 前端配置
+
+`NEXT_PUBLIC_API_BASE_URL` 已在 `pages.yml` 中设为 `https://tongjione.yzxoi.top`，后续无需修改。
+
+## CI 自动部署
+
+`workers/editor-backend/**` 路径的代码推送后，GitHub Actions 自动执行：
+
+```yaml
+# .github/workflows/worker-deploy.yml
+on:
+  push:
+    branches: [main]
+    paths: ["workers/editor-backend/**"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    steps:
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: workers/editor-backend
+          command: deploy
+```
+
+**前提**：在仓库 Settings → Secrets 中配置 `CLOUDFLARE_API_TOKEN`。
+
+## 本地开发
+
+```bash
+cd workers/editor-backend
+
+# 本地起 dev server (需要配置 dev 环境的 GITHUB_TOKEN)
+npx wrangler secret put GITHUB_TOKEN  # 如果还没配
+
+# 启动开发服务器
+npm run dev
+```
+
+## 常见问题
+
+### Q: 如何绑定自定义域名？
+
+Cloudflare Dashboard → Workers & Pages → 选择你的 Worker → Triggers → Custom Domains → Add Custom Domain
+
+### Q: 免费额度够用吗？
+
+- Workers：10 万请求/天（学生用户完全足够）
+- KV：1000 次写入/天，3000 万次读取/月（存储量极小）
+- R2：1GB 存储 + 每月 1000 万次读取（免费）
+
+### Q: 需要信用卡吗？
+
+不需要。Cloudflare Workers 免费计划不需要绑定支付方式。
+
+### Q: 如何查看日志？
+
+```bash
+npx wrangler tail
+```
+
+### Q: 如何更新代码？
+
+```bash
+# 1. 修改代码 → git push
+# 2. GitHub Actions 自动部署 Worker
+# 3. 无需手动操作
+
+# 或者手动部署：
+cd workers/editor-backend
+npx wrangler deploy
+```
+
+前端 (tongji.one)
+│
+├── POST /api/draft → 创建 Draft PR
+├── POST /api/submit → 创建正式 PR
+├── POST /api/update → 更新已有 PR + 可选 Promote
+├── POST /api/upload → 上传图片到 R2 + 写入仓库分支
+├── GET /api/image?id=xxx → 图片代理（从 R2 读取）
+├── GET /api/content → 读取仓库文件
+├── GET /api/pr-status → 查询 PR 状态
+├── GET /api/history → 按邮箱/学号查询历史
+└── GET /api/cleanup → 清理 24h 孤立图片
+
+````
+
+**核心差异 vs PHP 方案**：
+
+| 功能        | PHP 方案                  | Workers 方案                 |
+| ----------- | ------------------------- | ---------------------------- |
+| PR 映射存储 | MySQL (200MB)             | Workers KV（无限 key）       |
+| 图片存储    | 本地磁盘 temp/ + Git 仓库 | R2 对象存储                  |
+| 图片代理    | image.php fallback 链     | R2 直接读（CDN 加速）        |
+| 部署        | FTP 上传 PHP 文件         | `wrangler deploy` 一行命令   |
+| 域名        | 需要备案                  | `*.workers.dev` 免备案       |
+| 费用        | 免费                      | 免费（10万请求/天 + 1GB R2） |
+| CRON        | 需虚拟主机 cron 功能      | Worker 内建 Cron Triggers    |
+
+## 部署步骤
+
+### 第 1 步：安装 Wrangler CLI
+
+```bash
+cd workers/editor-backend
+npm install
+````
 
 ### 第 2 步：创建 KV 命名空间
 
