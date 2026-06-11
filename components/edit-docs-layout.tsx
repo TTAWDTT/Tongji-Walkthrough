@@ -1158,7 +1158,8 @@ export function EditDocsLayout({
                   {getMarkdownTitle(selectedContent) ?? selectedNode.title}
                 </h1>
                 <p className="mt-2 text-sm text-muted">
-                  Markdown changes are saved locally until you submit.
+                  编辑内容保存在本地，上传的图片请在 24 小时内暂存或提交，
+                  否则将被自动清理。
                 </p>
               </header>
               <MarkdownEditor
