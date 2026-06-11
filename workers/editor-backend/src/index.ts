@@ -139,6 +139,14 @@ function hasDeclaredChanges(changes: Changes): boolean {
   );
 }
 
+async function sha256Hex(data: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 // ---- Change-set → 单 commit 的写入集合 ----
 
 async function collectWrites(
@@ -285,8 +293,9 @@ app.post("/api/upload", async (c) => {
     }
   }
 
-  const uniqueName = `upload_${Date.now().toString(16)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 32)}.${ext}`;
   const buf = await file.arrayBuffer();
+  const contentHash = await sha256Hex(buf);
+  const uniqueName = `upload_${Date.now()}_${contentHash.slice(0, 32)}.${ext}`;
 
   await c.env.IMAGES_BUCKET.put(`images/${uniqueName}`, buf, {
     httpMetadata: { contentType: file.type },

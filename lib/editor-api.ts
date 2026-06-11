@@ -212,30 +212,14 @@ export type UploadResult = {
   markdown: string;
 };
 
-/**
- * Upload an image to the backend; falls back to an inline base64 data URL
- * when no backend is configured.
- */
+/** Upload an image to the backend; inline base64 images are intentionally disallowed. */
 export const uploadEditorImage = async (image: File): Promise<UploadResult> => {
   if (!image.type.startsWith("image/")) {
     throw new Error("Only image files can be uploaded.");
   }
 
   if (!getApiBaseUrl()) {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.addEventListener("load", () => {
-        if (typeof reader.result === "string") resolve(reader.result);
-        else reject(new Error("Failed to read image."));
-      });
-      reader.addEventListener("error", () => {
-        reject(reader.error ?? new Error("Failed to read image."));
-      });
-      reader.readAsDataURL(image);
-    });
-
-    return { filename: "", url: dataUrl, markdown: "" };
+    throw new Error("图片上传需要配置后端服务，不能以内联 base64 保存。");
   }
 
   const formData = new FormData();
