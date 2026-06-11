@@ -5,6 +5,21 @@ import type { Env } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 
+// UTF-8 safe base64 helpers (for Chinese/non-Latin-1 content)
+function utf8ToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+}
+
+function base64ToUtf8(encoded: string): string {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function githubApi(
   env: Env,
   method: string,
@@ -107,7 +122,7 @@ async function commitFileOnBranch(
   const body: Record<string, string> = {
     branch,
     message,
-    content: btoa(content),
+    content: utf8ToBase64(content),
   };
   if (sha) body.sha = sha;
 
@@ -125,6 +140,7 @@ export async function writeFilesToBranch(
   modified: Record<string, string>,
   created: Record<string, string>,
   deleted: string[],
+  checkCreatedOnBranch = false,
 ): Promise<void> {
   // Modified files: get sha from current branch, fallback to main, then overwrite
   for (const [filePath, content] of Object.entries(modified)) {
@@ -143,14 +159,19 @@ export async function writeFilesToBranch(
     await sleep(200);
   }
 
-  // Created files: no sha needed
+  // Created files: check if it already exists on branch (from prior draft)
   for (const [filePath, content] of Object.entries(created)) {
+    let sha: string | undefined;
+    if (checkCreatedOnBranch) {
+      const branchFile = await getFileFromBranch(env, filePath, branch);
+      sha = branchFile?.sha;
+    }
     await commitFileOnBranch(
       env,
       branch,
       filePath,
       content,
-      undefined,
+      sha,
       `[编辑更新] Create ${filePath.split("/").pop()}`,
     );
     await sleep(200);
@@ -236,9 +257,8 @@ export async function createPR(
 export async function markPRReady(env: Env, prNumber: number): Promise<void> {
   await githubApi(
     env,
-    "PATCH",
-    `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/pulls/${prNumber}`,
-    { draft: false },
+    "POST",
+    `/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/pulls/${prNumber}/ready_for_review`,
   );
 }
 

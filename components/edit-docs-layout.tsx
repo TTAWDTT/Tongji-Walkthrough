@@ -662,6 +662,7 @@ export function EditDocsLayout({
     const modified: Record<string, string> = {};
     const created: Record<string, string> = {};
     const deleted: string[] = [];
+    const images: string[] = [...uploadedImages];
 
     // Walk the current tree to find all pages
     const findCurrentPages = (
@@ -712,6 +713,18 @@ export function EditDocsLayout({
       return map;
     };
 
+    // Collect current tree state for modified/created detection
+    const allCurrent = findCurrentPages(tree);
+    for (const [path, content] of allCurrent) {
+      if (!(path in modified)) {
+        // It's either unchanged existing or a new page
+        const doc = docs.find((d) => `content/docs/${d.slug}.md` === path);
+        if (!doc) {
+          created[path] = content;
+        }
+      }
+    }
+
     // Find pages that existed initially but are removed from tree
     const currentPageIds = new Set<string>();
     const collectIds = (nodes: EditNode[]) => {
@@ -729,7 +742,7 @@ export function EditDocsLayout({
       }
     }
 
-    return { modified, created, deleted };
+    return { modified, created, deleted, images: uploadedImages };
   };
 
   const submitToBackend = async (mode: "draft" | "ready") => {
@@ -745,7 +758,7 @@ export function EditDocsLayout({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pr_number: cachedPR.prNumber,
+          prNumber: cachedPR.prNumber,
           promote: false,
           profile: { email: profile.email },
           changes,
@@ -766,7 +779,7 @@ export function EditDocsLayout({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pr_number: cachedPR.prNumber,
+          prNumber: cachedPR.prNumber,
           promote: true,
           profile: { email: profile.email },
           changes,
@@ -804,6 +817,19 @@ export function EditDocsLayout({
     prUrl: string;
     prType: string;
   } | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+
+  // Listen for image uploads from the editor
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.filename) {
+        setUploadedImages((prev) => [...prev, detail.filename]);
+      }
+    };
+    window.addEventListener("image-uploaded", handler);
+    return () => window.removeEventListener("image-uploaded", handler);
+  }, []);
 
   const clearHoverTimer = () => {
     if (!hoverTimer.current) return;
@@ -1006,13 +1032,13 @@ export function EditDocsLayout({
       const result = await submitToBackend(mode);
 
       setLastResult({
-        prNumber: result.pr_number,
-        prUrl: result.pr_url,
+        prNumber: result.prNumber,
+        prUrl: result.prUrl,
         prType: mode,
       });
 
-      if (mode === "draft" && result.pr_number) {
-        setCachedPR(result.pr_number, "draft", profile.email);
+      if (mode === "draft" && result.prNumber) {
+        setCachedPR(result.prNumber, "draft", profile.email);
       } else if (mode === "ready") {
         clearCachedPR();
       }

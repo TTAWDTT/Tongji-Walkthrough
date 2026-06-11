@@ -25,6 +25,7 @@ import {
 type MarkdownEditorClientProps = {
   value: string;
   onChange: (value: string) => void;
+  onImageUploaded?: (filename: string) => void;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
@@ -75,7 +76,15 @@ const imageUploadHandler = async (image: File): Promise<string> => {
   }
 
   const data = await res.json();
-  return data.markdown;
+  // Notify parent of uploaded image filename for PR change tracking
+  if (data.filename) {
+    window.dispatchEvent(
+      new CustomEvent("image-uploaded", {
+        detail: { filename: data.filename },
+      }),
+    );
+  }
+  return data.url;
 };
 
 export default function MarkdownEditorClient({

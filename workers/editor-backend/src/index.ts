@@ -32,6 +32,7 @@ app.use(
       return allowed.includes(origin) ? origin : null;
     },
     allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type"],
   }),
 );
 
@@ -429,7 +430,10 @@ app.post("/api/update", async (c) => {
     );
   }
 
-  // Write files to existing branch
+  // --- Write files to existing branch ---
+  // For update, we assume the client sends the complete desired state.
+  // Files in 'modified' are overwritten; 'created' first checks if file
+  // already exists on branch (from a prior draft update) and uses the sha.
   try {
     await gh.writeFilesToBranch(
       c.env,
@@ -437,6 +441,7 @@ app.post("/api/update", async (c) => {
       body.changes.modified || {},
       body.changes.created || {},
       body.changes.deleted || [],
+      true, // checkCreatedOnBranch: try branch sha first
     );
 
     // Handle images from R2
