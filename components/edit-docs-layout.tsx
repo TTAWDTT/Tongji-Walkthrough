@@ -1,15 +1,9 @@
 import type { DragEvent, FormEvent } from "react";
 import type { DocSourceItem } from "@/lib/docs";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Button,
-  Form,
-  InputGroup,
-  Modal,
-  TextArea,
-  TextField,
-} from "@heroui/react";
+import { Button, Form, InputGroup, Modal, TextField } from "@heroui/react";
 import clsx from "clsx";
 
 import { Head } from "@/layouts/head";
@@ -34,6 +28,21 @@ type Profile = {
   qq: string;
   github: string;
 };
+
+type MarkdownEditorProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const MarkdownEditor = dynamic<MarkdownEditorProps>(
+  () => import("@/components/markdown-editor-client"),
+  {
+    loading: () => (
+      <div className="markdown-editor-loading">Loading editor...</div>
+    ),
+    ssr: false,
+  },
+);
 
 const defaultProfile: Profile = {
   studentId: "",
@@ -939,13 +948,9 @@ export function EditDocsLayout({
                   Markdown changes are saved locally until you submit.
                 </p>
               </header>
-              <TextArea
-                fullWidth
-                className="edit-markdown-area min-h-[60vh] font-mono"
+              <MarkdownEditor
                 value={selectedContent}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-
+                onChange={(value) => {
                   setContents((items) => ({
                     ...items,
                     [selectedPageId]: value,

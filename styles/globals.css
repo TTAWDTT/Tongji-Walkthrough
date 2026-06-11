@@ -272,6 +272,202 @@ html {
     animation: edit-doc-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.markdown-editor,
+.markdown-editor-loading {
+    min-height: 60vh;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklch, var(--foreground) 14%, transparent);
+    border-radius: 0.5rem;
+    background: color-mix(in oklch, var(--background) 96%, var(--foreground) 4%);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent);
+}
+
+.markdown-editor {
+    --basePageBg: var(--background);
+    --baseBase: color-mix(in oklch, var(--background) 94%, var(--foreground) 6%);
+    --baseBgSubtle: color-mix(in oklch, var(--background) 90%, var(--foreground) 10%);
+    --baseBg: color-mix(in oklch, var(--background) 84%, var(--foreground) 16%);
+    --baseBgHover: color-mix(in oklch, var(--background) 78%, var(--foreground) 22%);
+    --baseBgActive: color-mix(in oklch, var(--accent) 16%, var(--background));
+    --baseLine: color-mix(in oklch, var(--foreground) 14%, transparent);
+    --baseBorder: color-mix(in oklch, var(--foreground) 18%, transparent);
+    --baseBorderHover: color-mix(in oklch, var(--foreground) 28%, transparent);
+    --baseSolid: var(--muted);
+    --baseSolidHover: var(--foreground);
+    --baseText: var(--muted);
+    --baseTextContrast: var(--foreground);
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif;
+}
+
+.markdown-editor,
+.markdown-editor * {
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif !important;
+}
+
+.markdown-editor-content {
+    min-height: 52vh;
+    padding: 1rem 1.125rem;
+    color: var(--foreground) !important;
+    caret-color: var(--accent);
+    font-family: var(--font-lxgw-sans), system-ui, sans-serif !important;
+    font-size: 1rem;
+    line-height: 1.85;
+}
+
+.markdown-editor-content * {
+    color: inherit;
+}
+
+.markdown-editor-heading {
+    color: var(--foreground) !important;
+}
+
+.markdown-editor-content h1,
+.markdown-editor-heading-1 {
+    margin: 0.7rem 0 0.65rem;
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+    line-height: 1.25 !important;
+}
+
+.markdown-editor-content h2,
+.markdown-editor-heading-2 {
+    margin: 0.65rem 0 0.55rem;
+    font-size: 1.55rem !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+}
+
+.markdown-editor-content h3,
+.markdown-editor-heading-3 {
+    margin: 0.55rem 0 0.45rem;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    line-height: 1.35 !important;
+}
+
+.markdown-editor-heading-4,
+.markdown-editor-heading-5,
+.markdown-editor-heading-6 {
+    margin: 0.5rem 0 0.4rem;
+    font-size: 1.08rem !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+}
+
+.markdown-editor-content p {
+    margin: 0.45rem 0;
+}
+
+.markdown-editor-content ul,
+.markdown-editor-content ol,
+.markdown-editor-list {
+    margin: 0.55rem 0;
+    padding-left: 1.75rem !important;
+}
+
+.markdown-editor-content ul,
+.markdown-editor-ul {
+    list-style: disc outside !important;
+    list-style-type: disc !important;
+}
+
+.markdown-editor-content ol,
+.markdown-editor-ol {
+    list-style: decimal outside !important;
+    list-style-type: decimal !important;
+}
+
+.markdown-editor-list-depth-1 {
+    list-style-type: circle !important;
+}
+
+.markdown-editor-list-depth-2 {
+    list-style-type: square !important;
+}
+
+.markdown-editor-list-item,
+.markdown-editor-content li {
+    display: list-item !important;
+    margin: 0.22rem 0;
+    padding-left: 0.35rem;
+    color: var(--foreground) !important;
+    line-height: 1.78;
+    list-style-position: outside !important;
+}
+
+.markdown-editor-ul > .markdown-editor-list-item,
+.markdown-editor-content ul > li {
+    list-style-type: disc !important;
+}
+
+.markdown-editor-ol > .markdown-editor-list-item,
+.markdown-editor-content ol > li {
+    list-style-type: decimal !important;
+}
+
+.markdown-editor-list-item::marker,
+.markdown-editor-content li::marker {
+    color: color-mix(in oklch, var(--accent) 72%, var(--foreground) 28%);
+    font-weight: 600;
+}
+
+.markdown-editor-nested-list {
+    margin: 0.25rem 0;
+    padding-left: 1.5rem !important;
+}
+
+.markdown-editor-content code,
+.markdown-editor code,
+.markdown-editor-inline-code {
+    border-radius: 0.25rem;
+    background: color-mix(in oklch, var(--foreground) 10%, transparent) !important;
+    color: var(--foreground) !important;
+    padding: 0.12rem 0.32rem;
+    font-family: var(--font-lxgw-mono), monospace !important;
+}
+
+.markdown-editor-content pre,
+.markdown-editor pre {
+    border: 1px solid color-mix(in oklch, var(--foreground) 12%, transparent);
+    border-radius: 0.5rem;
+    background: color-mix(in oklch, var(--foreground) 8%, transparent) !important;
+    color: var(--foreground) !important;
+}
+
+.markdown-editor [role="toolbar"] {
+    border-bottom: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
+    background: color-mix(in oklch, var(--background) 92%, var(--foreground) 8%);
+}
+
+.markdown-editor-loading {
+    display: flex;
+    min-height: 12rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+}
+
+[class*="_linkDialogPopoverContent_"],
+[class*="_dialogContent_"] {
+    max-width: min(24rem, calc(100vw - 1.5rem)) !important;
+    flex-wrap: wrap !important;
+}
+
+[class*="_linkDialogEditForm_"],
+[class*="_linkDialogInputContainer_"],
+[class*="_linkDialogInputWrapper_"] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+[class*="_linkDialogInput_"],
+[class*="_dialogInput_"] {
+    width: min(14rem, calc(100vw - 5rem)) !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
 .profile-input-group {
     border: 1px solid color-mix(in oklch, var(--foreground) 18%, transparent);
     background: color-mix(in oklch, var(--background) 92%, var(--foreground) 8%);
