@@ -39,6 +39,7 @@ yarn.lock
 package-lock.json
 bun.lockb
 
-# backend (PHP server for PR editing workflow)
-/backend/config.php
-/backend/temp/images/
+# cloudflare workers
+/workers/editor-backend/node_modules/
+/workers/editor-backend/.wrangler/
+/workers/editor-backend/worker-configuration.d.ts

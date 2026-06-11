@@ -741,7 +741,7 @@ export function EditDocsLayout({
 
     if (cachedPR && sameUser && mode === "draft") {
       // Update existing draft PR
-      const res = await fetch(`${apiBaseUrl}/update.php`, {
+      const res = await fetch(`${apiBaseUrl}/api/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -762,7 +762,7 @@ export function EditDocsLayout({
 
     if (cachedPR && sameUser && mode === "ready") {
       // Promote existing draft to ready
-      const res = await fetch(`${apiBaseUrl}/update.php`, {
+      const res = await fetch(`${apiBaseUrl}/api/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -782,8 +782,8 @@ export function EditDocsLayout({
     }
 
     // Create new PR
-    const endpoint = mode === "draft" ? "draft.php" : "submit.php";
-    const res = await fetch(`${apiBaseUrl}/${endpoint}`, {
+    const endpoint = mode === "draft" ? "/api/draft" : "/api/submit";
+    const res = await fetch(`${apiBaseUrl}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile, changes }),

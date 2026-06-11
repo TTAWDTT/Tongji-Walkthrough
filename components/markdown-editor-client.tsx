@@ -64,7 +64,7 @@ const imageUploadHandler = async (image: File): Promise<string> => {
     }
   }
 
-  const res = await fetch(`${API_BASE}/upload.php`, {
+  const res = await fetch(`${API_BASE}/api/upload`, {
     method: "POST",
     body: formData,
   });
