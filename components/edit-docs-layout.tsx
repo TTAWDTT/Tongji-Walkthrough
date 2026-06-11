@@ -660,23 +660,46 @@ export function EditDocsLayout({
     const deleted: string[] = [];
     const images: string[] = [...uploadedImages];
 
-    // Walk the current tree to find all pages
-    const findCurrentPages = (
-      nodes: EditNode[],
-      pathPrefix: string = "",
-    ): Map<string, string> => {
-      const map = new Map<string, string>();
+    // Build a map of current tree positions: slug -> path
+    // For existing pages (page:slug), detect rename/move by comparing
+    // their current tree position (parent folder + title) against docs
+    const existingBySlug = new Map<string, DocSourceItem>();
+    for (const doc of docs) {
+      existingBySlug.set(doc.slug, doc);
+    }
+
+    // Recursive walk to build current path for each page node
+    const walkTree = (nodes: EditNode[], currentPrefix: string) => {
       for (const node of nodes) {
         if (node.type === "page") {
-          const slugFromId = node.id.startsWith("page:")
-            ? node.id.slice(5)
-            : null;
-          if (slugFromId) {
-            // Existing page
+          if (node.id.startsWith("page:")) {
+            // Existing page — check if it moved or was renamed
+            const slugFromId = node.id.slice(5);
+            const oldDoc = existingBySlug.get(slugFromId);
+            if (!oldDoc) continue; // shouldn't happen
+
+            // Compute current path from tree position + title-derived slug
+            const titleSlug =
+              (node.title || "untitled")
+                .toLowerCase()
+                .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+                .replace(/^-|-$/g, "") || "untitled";
+            const currentPath = currentPrefix
+              ? `content/docs/${currentPrefix}/${titleSlug}.md`
+              : `content/docs/${titleSlug}.md`;
+            const oldPath = `content/docs/${oldDoc.slug}.md`;
+
+            // If path changed, it's a rename/move
             const content = contents[node.id] ?? node.content ?? "";
             const initial = initialContents[node.id];
-            if (initial !== undefined && initial !== content) {
-              modified[`content/docs/${slugFromId}.md`] = content;
+
+            if (currentPath !== oldPath) {
+              // Renamed or moved: delete old path, create new path
+              deleted.push(oldPath);
+              created[currentPath] = content;
+            } else if (initial !== undefined && initial !== content) {
+              // Same path but content changed
+              modified[currentPath] = content;
             }
           } else if (node.id.startsWith("draft-page-")) {
             // New draft page: generate a slug from title
@@ -686,10 +709,9 @@ export function EditDocsLayout({
                 .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
                 .replace(/^-|-$/g, "") || "untitled";
             const content = contents[node.id] ?? node.content ?? "";
-            const filePath = pathPrefix
-              ? `content/docs/${pathPrefix}/${slug}.md`
+            const filePath = currentPrefix
+              ? `content/docs/${currentPrefix}/${slug}.md`
               : `content/docs/${slug}.md`;
-            // Check if already in created
             if (!(filePath in created)) created[filePath] = content;
           }
         } else if (node.type === "folder" && node.children) {
@@ -697,29 +719,15 @@ export function EditDocsLayout({
             .toLowerCase()
             .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
             .replace(/^-|-$/g, "");
-          const childPrefix = pathPrefix
-            ? `${pathPrefix}/${folderSlug}`
+          const childPrefix = currentPrefix
+            ? `${currentPrefix}/${folderSlug}`
             : folderSlug;
-          const childMap = findCurrentPages(node.children, childPrefix);
-          childMap.forEach((content, path) => {
-            created[path] = content;
-          });
+          walkTree(node.children, childPrefix);
         }
       }
-      return map;
     };
 
-    // Collect current tree state for modified/created detection
-    const allCurrent = findCurrentPages(tree);
-    for (const [path, content] of allCurrent) {
-      if (!(path in modified)) {
-        // It's either unchanged existing or a new page
-        const doc = docs.find((d) => `content/docs/${d.slug}.md` === path);
-        if (!doc) {
-          created[path] = content;
-        }
-      }
-    }
+    walkTree(tree, "");
 
     // Find pages that existed initially but are removed from tree
     const currentPageIds = new Set<string>();
@@ -734,7 +742,11 @@ export function EditDocsLayout({
     for (const doc of docs) {
       const pageId = `page:${doc.slug}`;
       if (!currentPageIds.has(pageId)) {
-        deleted.push(`content/docs/${doc.slug}.md`);
+        const path = `content/docs/${doc.slug}.md`;
+        // Only add to deleted if not already handled by rename detection
+        if (!deleted.includes(path)) {
+          deleted.push(path);
+        }
       }
     }
 
@@ -1025,6 +1037,15 @@ export function EditDocsLayout({
 
     try {
       const result = await submitToBackend(mode);
+
+      // Issue 3 fix: check promoteFailed — don't clear cache, show error
+      if (result.promoteFailed) {
+        setSubmitError(
+          "文件已更新，但转为正式 PR 失败，请稍后重试。暂存数据未清除。",
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
       setLastResult({
         prNumber: result.prNumber,

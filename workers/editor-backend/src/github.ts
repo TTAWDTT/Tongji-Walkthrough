@@ -270,8 +270,8 @@ async function listDirFiles(
   }
 }
 
-// Clean up files on the branch that are NOT in modified or created
-// This handles cases like: rename draft page (old slug not sent in deleted)
+// Clean up draft-owned files on the branch that are NOT in modified or created
+// Only deletes files that DON'T exist on main (skip inherited files)
 export async function cleanBranchFiles(
   env: Env,
   branch: string,
@@ -281,8 +281,14 @@ export async function cleanBranchFiles(
   const kept = new Set(Object.keys(modified));
   for (const p of Object.keys(created)) kept.add(p);
 
+  // Get files on main to skip inherited ones
+  const onMain = await listDocFiles(env, env.GITHUB_BRANCH);
+  const mainSet = new Set(onMain);
+
   const onBranch = await listDocFiles(env, branch);
   for (const filePath of onBranch) {
+    // Skip inherited files — only clean draft-owned files
+    if (mainSet.has(filePath)) continue;
     if (!kept.has(filePath)) {
       const existing = await getFileFromBranch(env, filePath, branch);
       if (existing) {
@@ -299,7 +305,7 @@ export async function cleanBranchFiles(
           );
           await sleep(200);
         } catch {
-          /* non-blocking — file may already have been deleted */
+          /* non-blocking */
         }
       }
     }
