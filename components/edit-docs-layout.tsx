@@ -29,6 +29,7 @@ import {
   fetchPRChanges,
   getApiBaseUrl,
   normalizeEmail,
+  normalizeCachedProfile,
   readCachedPR,
   updatePR,
   writeCachedPR,
@@ -955,6 +956,9 @@ export function EditDocsLayout({
 
       if (!cached) return;
       setCachedPRState(cached);
+      if (cached.profile) {
+        setProfile(cached.profile);
+      }
 
       try {
         const pr = await fetchPRChanges(cached.prNumber, cached.email);
@@ -1324,6 +1328,13 @@ export function EditDocsLayout({
           prNumber: result.prNumber,
           type: "draft",
           email: normalizedProfileEmail,
+          profile: normalizeCachedProfile({
+            studentId: profile.studentId,
+            name: profile.name,
+            email: normalizedProfileEmail,
+            qq: profile.qq,
+            github: profile.github,
+          }),
         };
 
         writeCachedPR(cache);
@@ -1645,6 +1656,7 @@ export function EditDocsLayout({
                 <Modal.Footer className="flex flex-wrap gap-2">
                   {cachedPR && (
                     <Button
+                      className="text-danger hover:text-danger"
                       isDisabled={isSubmitting || isDiscarding}
                       variant="tertiary"
                       onPress={handleDiscard}
@@ -1717,9 +1729,10 @@ export function EditDocsLayout({
                   </a>
                 )}
               </Modal.Body>
-              <Modal.Footer className="flex gap-2">
+              <Modal.Footer className="flex flex-wrap gap-2">
                 {lastResult?.prType === "draft" && (
                   <Button
+                    className="text-danger hover:text-danger"
                     isDisabled={isDiscarding}
                     variant="tertiary"
                     onPress={handleDiscard}
@@ -1727,14 +1740,33 @@ export function EditDocsLayout({
                     {isDiscarding ? "处理中..." : "放弃暂存"}
                   </Button>
                 )}
-                <Button
-                  variant="primary"
-                  onPress={() => {
-                    window.location.href = `${basePath}/docs`;
-                  }}
-                >
-                  返回文档
-                </Button>
+                {lastResult?.prType === "draft" ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onPress={() => {
+                        window.location.href = `${basePath}/docs`;
+                      }}
+                    >
+                      返回文档（主站）
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onPress={() => setIsSuccessOpen(false)}
+                    >
+                      继续编辑
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="primary"
+                    onPress={() => {
+                      window.location.href = `${basePath}/docs`;
+                    }}
+                  >
+                    返回文档
+                  </Button>
+                )}
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

@@ -9,9 +9,32 @@ export type CachedPR = {
   prNumber: number;
   type: string;
   email: string;
+  profile?: CachedProfile;
+};
+
+export type CachedProfile = {
+  studentId: string;
+  name: string;
+  email: string;
+  qq: string;
+  github: string;
 };
 
 export const normalizeEmail = (email: string): string => email.trim();
+
+export const normalizeCachedProfile = (
+  profile: Partial<CachedProfile> | undefined,
+): CachedProfile | undefined => {
+  if (!profile) return undefined;
+
+  return {
+    studentId: profile.studentId?.trim() ?? "",
+    name: profile.name?.trim() ?? "",
+    email: normalizeEmail(profile.email ?? ""),
+    qq: profile.qq?.trim() ?? "",
+    github: profile.github?.trim() ?? "",
+  };
+};
 
 export type PRFileChange = {
   path: string;
@@ -52,9 +75,13 @@ export const readCachedPR = (): CachedPR | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedPR;
 
-    return typeof parsed?.prNumber === "number"
-      ? { ...parsed, email: normalizeEmail(parsed.email ?? "") }
-      : null;
+    if (typeof parsed?.prNumber !== "number") return null;
+
+    return {
+      ...parsed,
+      email: normalizeEmail(parsed.email ?? ""),
+      profile: normalizeCachedProfile(parsed.profile),
+    };
   } catch {
     return null;
   }
@@ -64,7 +91,11 @@ export const writeCachedPR = (value: CachedPR): void => {
   try {
     localStorage.setItem(
       PR_CACHE_KEY,
-      JSON.stringify({ ...value, email: normalizeEmail(value.email) }),
+      JSON.stringify({
+        ...value,
+        email: normalizeEmail(value.email),
+        profile: normalizeCachedProfile(value.profile),
+      }),
     );
   } catch {
     /* storage unavailable */
