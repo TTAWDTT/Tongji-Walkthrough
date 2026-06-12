@@ -4,18 +4,12 @@ order: 10
 ---
 
 > 你好\~
-> 这是测试\~
+>
 
-# 我弄个图片试试🤔\<-这是测试emoji
+假如您想参与编写，请点击此页面右侧的‘Edit’按钮进入编辑模式\~
 
-<img height="171" width="171" src="https://tongjione.yzxoi.top/api/image?id=upload_1781246917635_7936d6f8ef97d29e4fec870d969ee2f7.jpg" />
+发现bug请通过GitHub或是右上角微信反馈\~（编辑页现在其实有bug，但是有人发现了再改。。。）
 
-***
+暂时先写这么多，后面想到啥补充啥吧，唉🤦‍
 
-
-
-<u>*不错不错*</u>
-
-##### 有没有容易出错的。
-
-编辑页有bug。有人发现再修吧。
+<img height="239" width="239" src="https://tongjione.yzxoi.top/api/image?id=upload_1781248456006_7936d6f8ef97d29e4fec870d969ee2f7.jpg" />
