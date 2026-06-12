@@ -6,6 +6,9 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const unescapeMarkdownPunctuation = (value: string) =>
+  value.replace(/\\([\\`*{}\[\]()#+\-.!_~<>])/g, "$1");
+
 const isSafeImageSrc = (src: string) =>
   /^(https?:\/\/|\/(?!\/)|\.{0,2}\/)/i.test(src) &&
   !/[\u0000-\u001f]/.test(src);
@@ -69,13 +72,15 @@ const renderMarkdownImage = (source: string) => {
 };
 
 const renderInline = (value: string) =>
-  escapeHtml(value)
+  escapeHtml(unescapeMarkdownPunctuation(value))
     .replace(
       /!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g,
       (_, alt, src) => renderImage({ alt, src }),
     )
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, "<u>$1</u>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
 export const markdownToHtml = (markdown: string) => {
@@ -132,7 +137,7 @@ export const markdownToHtml = (markdown: string) => {
       continue;
     }
 
-    const heading = line.match(/^(#{2,3})\s+(.+)$/);
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
 
     if (heading) {
       flushList();
@@ -140,6 +145,15 @@ export const markdownToHtml = (markdown: string) => {
       const level = heading[1].length;
 
       html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+
+      continue;
+    }
+
+    const horizontalRule = line.trim().match(/^(\*\s*){3,}$|^(-\s*){3,}$/);
+
+    if (horizontalRule) {
+      flushList();
+      html.push("<hr />");
 
       continue;
     }

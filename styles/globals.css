@@ -653,6 +653,14 @@ html {
     line-height: 1.85;
 }
 
+.docs-markdown h1 {
+    font-size: 2rem;
+    font-weight: 500;
+    line-height: 1.25;
+    margin-top: 2.25rem;
+    margin-bottom: 1rem;
+}
+
 .docs-markdown h2 {
     font-size: 1.5rem;
     font-weight: 500;
@@ -668,11 +676,21 @@ html {
     margin-bottom: 0.5rem;
 }
 
+.docs-markdown h4,
+.docs-markdown h5,
+.docs-markdown h6 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-top: 1.25rem;
+    margin-bottom: 0.4rem;
+}
+
 .docs-markdown p,
 .docs-markdown ul,
 .docs-markdown ol,
 .docs-markdown pre,
-.docs-markdown blockquote {
+.docs-markdown blockquote,
+.docs-markdown hr {
     margin-bottom: 1rem;
 }
 
@@ -693,6 +711,10 @@ html {
     color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 4px;
+}
+
+.docs-markdown u {
+    text-underline-offset: 3px;
 }
 
 .docs-markdown img {
@@ -717,6 +739,12 @@ html {
     border-radius: 0.5rem;
     background: color-mix(in oklch, var(--foreground) 8%, transparent);
     padding: 1rem;
+}
+
+.docs-markdown hr {
+    border: 0;
+    border-top: 1px solid color-mix(in oklch, var(--foreground) 12%, transparent);
+    margin-top: 1.5rem;
 }
 
 .docs-markdown pre code {
