@@ -230,7 +230,7 @@ export const getAllDocSources = (): DocSourceItem[] =>
       slug,
       href,
       order,
-      description,
+      description: description ?? "",
       content: body,
       frontmatter,
     }),
@@ -258,7 +258,7 @@ export const getDocBySlug = (slug?: string | string[]): DocPageData | null => {
     slug: doc.slug,
     href: doc.href,
     order: doc.order,
-    description: doc.description,
+    description: doc.description ?? "",
     contentHtml: markdownToHtml(doc.body),
     navItems: getDocNavTree(),
   };
