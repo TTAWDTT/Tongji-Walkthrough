@@ -314,6 +314,38 @@ html {
     transform: translateX(6px) scale(1.018);
 }
 
+.edit-tree-insert-line {
+    pointer-events: none;
+    position: absolute;
+    left: 0.45rem;
+    right: 0.45rem;
+    z-index: 2;
+    height: 2px;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--accent) 82%, var(--foreground) 18%);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 14%, transparent);
+}
+
+.edit-tree-insert-line::before {
+    position: absolute;
+    top: 50%;
+    left: -0.25rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: inherit;
+    content: "";
+    transform: translateY(-50%);
+}
+
+.edit-tree-insert-line-before {
+    top: -0.18rem;
+}
+
+.edit-tree-insert-line-after {
+    bottom: -0.18rem;
+}
+
 .edit-tree-children {
     display: grid;
     grid-template-rows: 0fr;

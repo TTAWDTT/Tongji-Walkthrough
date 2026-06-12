@@ -94,6 +94,15 @@ export const getFrontmatterTitle = (frontmatter: string): string | null => {
   return match[1].trim().replace(/^["']|["']$/g, "") || null;
 };
 
+export const getFrontmatterOrder = (frontmatter: string): number | null => {
+  const match = frontmatter.match(/^order:\s*(.+)$/m);
+
+  if (!match) return null;
+  const order = Number(match[1].trim());
+
+  return Number.isFinite(order) ? order : null;
+};
+
 /** Return frontmatter with `title:` set, creating the block when absent. */
 export const withFrontmatterTitle = (
   frontmatter: string,
@@ -107,6 +116,20 @@ export const withFrontmatterTitle = (
   }
 
   return frontmatter.replace(/^---\n/, `---\n${line}\n`);
+};
+
+export const withFrontmatterOrder = (
+  frontmatter: string,
+  order: number,
+): string => {
+  const line = `order: ${order}`;
+
+  if (!frontmatter) return `---\n${line}\n---`;
+  if (/^order:.*$/m.test(frontmatter)) {
+    return frontmatter.replace(/^order:.*$/m, line);
+  }
+
+  return frontmatter.replace(/\n---$/, `\n${line}\n---`);
 };
 
 export const folderMetaContent = (title: string, order: number): string =>
@@ -128,6 +151,8 @@ const docPath = (dirPrefix: string, fileSegment: string): string =>
 
 const metaPath = (dirPath: string): string =>
   `${DOCS_PREFIX}/${dirPath}/_meta.json`;
+
+const ORDER_STEP = 10;
 
 export function buildChanges(args: {
   tree: EditNode[];
@@ -163,6 +188,62 @@ export function buildChanges(args: {
   const pathsByNodeId: Record<string, string> = {};
   const usedPaths = new Set<string>();
   const foldersBySlug = new Map(folders.map((f) => [f.slug, f]));
+  const originalSiblingsByDir = new Map<
+    string,
+    { id: string; order: number; title: string }[]
+  >();
+
+  const addOriginalSibling = (
+    dir: string,
+    item: { id: string; order: number; title: string },
+  ) => {
+    const siblings = originalSiblingsByDir.get(dir) ?? [];
+
+    siblings.push(item);
+    originalSiblingsByDir.set(dir, siblings);
+  };
+
+  for (const doc of docs) {
+    const dir = doc.slug.split("/").slice(0, -1).join("/");
+
+    addOriginalSibling(dir, {
+      id: `page:${doc.slug}`,
+      order: getFrontmatterOrder(doc.frontmatter) ?? 1000,
+      title: getFrontmatterTitle(doc.frontmatter) ?? lastSegment(doc.slug),
+    });
+  }
+  for (const folder of folders) {
+    const dir = folder.slug.split("/").slice(0, -1).join("/");
+
+    addOriginalSibling(dir, {
+      id: `folder:${folder.slug}`,
+      order: folder.order,
+      title: folder.title,
+    });
+  }
+  for (const siblings of originalSiblingsByDir.values()) {
+    siblings.sort(
+      (a, b) => a.order - b.order || a.title.localeCompare(b.title),
+    );
+  }
+
+  const desiredSiblingOrders = (
+    nodes: EditNode[],
+    dirPrefix: string,
+  ): Map<string, number> => {
+    const baseline =
+      originalSiblingsByDir.get(dirPrefix)?.map((n) => n.id) ?? [];
+    const current = nodes.map((node) => node.id);
+    const unchanged =
+      baseline.length === current.length &&
+      baseline.every((id, index) => id === current[index]);
+
+    if (unchanged) return new Map();
+
+    return new Map(
+      nodes.map((node, index) => [node.id, (index + 1) * ORDER_STEP]),
+    );
+  };
 
   const claimPath = (wanted: string): string => {
     if (!usedPaths.has(wanted)) {
@@ -210,7 +291,11 @@ export function buildChanges(args: {
   walkReserve(tree, "");
 
   const walk = (nodes: EditNode[], dirPrefix: string) => {
+    const siblingOrders = desiredSiblingOrders(nodes, dirPrefix);
+
     for (const node of nodes) {
+      const desiredOrder = siblingOrders.get(node.id);
+
       if (node.type === "folder") {
         const segment = node.slug
           ? lastSegment(node.slug)
@@ -221,17 +306,22 @@ export function buildChanges(args: {
           const original = foldersBySlug.get(node.slug);
           const movedDir = dirPath !== node.slug;
           const titleChanged = original ? node.title !== original.title : true;
-          const order = original?.order ?? 1000;
+          const order = desiredOrder ?? original?.order ?? 1000;
+          const orderChanged =
+            desiredOrder !== undefined && desiredOrder !== original?.order;
 
           if (movedDir) {
             // Directory moved: its _meta.json travels with it.
             deleted.add(metaPath(node.slug));
             created[metaPath(dirPath)] = folderMetaContent(node.title, order);
-          } else if (titleChanged) {
+          } else if (titleChanged || orderChanged) {
             modified[metaPath(dirPath)] = folderMetaContent(node.title, order);
           }
         } else {
-          created[metaPath(dirPath)] = folderMetaContent(node.title, 1000);
+          created[metaPath(dirPath)] = folderMetaContent(
+            node.title,
+            desiredOrder ?? 1000,
+          );
         }
 
         pathsByNodeId[node.id] = metaPath(dirPath);
@@ -247,7 +337,11 @@ export function buildChanges(args: {
 
       const body = contents[node.id] ?? node.content ?? "";
       const frontmatter = frontmatters[node.id] ?? "";
-      const fileContent = joinDocSource(frontmatter, body);
+      const orderedFrontmatter =
+        desiredOrder !== undefined
+          ? withFrontmatterOrder(frontmatter, desiredOrder)
+          : frontmatter;
+      const fileContent = joinDocSource(orderedFrontmatter, body);
 
       if (node.slug) {
         const fileSegment = lastSegment(node.slug);
@@ -263,7 +357,9 @@ export function buildChanges(args: {
         const initialFm = initialFrontmatters[node.id] ?? "";
         const isKnownDoc = initialBody !== undefined;
         const changed =
-          !isKnownDoc || initialBody !== body || initialFm !== frontmatter;
+          !isKnownDoc ||
+          initialBody !== body ||
+          initialFm !== orderedFrontmatter;
 
         if (movedDir) {
           deleted.add(originalPath);

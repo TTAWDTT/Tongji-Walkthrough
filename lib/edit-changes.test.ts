@@ -2,12 +2,14 @@ import { describe, expect, it } from "bun:test";
 
 import {
   buildChanges,
+  getFrontmatterOrder,
   getFrontmatterTitle,
   joinDocSource,
   parseDocPath,
   parseMetaPath,
   slugifyTitle,
   splitDocSource,
+  withFrontmatterOrder,
   withFrontmatterTitle,
   type DocSource,
   type EditNode,
@@ -56,8 +58,8 @@ const baseTree = (): EditNode[] => [
 
 const baseArgs = () => ({
   tree: baseTree(),
-  docs,
-  folders,
+  docs: [...docs],
+  folders: [...folders],
   contents: {
     "page:introduction": introBody,
     "page:life/canteen": canteenBody,
@@ -102,6 +104,12 @@ describe("frontmatter helpers", () => {
     expect(getFrontmatterTitle(renamed)).toBe("新标题");
     // 其余字段保持不变
     expect(renamed).toContain("description: Start here.");
+  });
+
+  it("reads and writes the order field", () => {
+    expect(getFrontmatterOrder(introFm)).toBe(1);
+    expect(getFrontmatterOrder(withFrontmatterOrder(introFm, 30))).toBe(30);
+    expect(withFrontmatterOrder("", 10)).toBe("---\norder: 10\n---");
   });
 
   it("creates a frontmatter block when absent", () => {
@@ -204,6 +212,77 @@ describe("buildChanges", () => {
     expect(result.modified["content/docs/life/_meta.json"]).toContain("10");
     expect(result.deleted).toEqual([]);
     expect(result.created).toEqual({});
+  });
+
+  it("persists root sibling reorder through order metadata", () => {
+    const args = baseArgs();
+
+    args.tree = [args.tree[1], args.tree[0]];
+    const result = buildChanges(args);
+
+    expect(result.modified["content/docs/introduction.md"]).toContain(
+      "order: 20",
+    );
+    expect(result.modified["content/docs/life/_meta.json"]).toBeUndefined();
+    expect(result.created).toEqual({});
+    expect(result.deleted).toEqual([]);
+  });
+
+  it("persists folder reorder through folder meta order", () => {
+    const args = baseArgs();
+
+    args.folders.push({ slug: "tools", title: "工具", order: 20 });
+    args.tree.push({
+      id: "folder:tools",
+      type: "folder",
+      title: "工具",
+      parentId: null,
+      slug: "tools",
+      children: [],
+    });
+    args.tree = [args.tree[0], args.tree[2], args.tree[1]];
+
+    const result = buildChanges(args);
+
+    expect(result.modified["content/docs/life/_meta.json"]).toContain(
+      '"order": 30',
+    );
+    expect(result.modified["content/docs/tools/_meta.json"]).toBeUndefined();
+  });
+
+  it("persists nested page reorder through frontmatter order", () => {
+    const args = baseArgs();
+    const dormFm = `---\ntitle: 宿舍指南\norder: 3\n---`;
+    const dormBody = "## 宿舍\n\n舒服\n";
+
+    args.docs.push({
+      slug: "life/dormitory",
+      content: dormBody,
+      frontmatter: dormFm,
+    });
+    args.contents["page:life/dormitory"] = dormBody;
+    args.frontmatters["page:life/dormitory"] = dormFm;
+    args.initialContents["page:life/dormitory"] = dormBody;
+    args.initialFrontmatters["page:life/dormitory"] = dormFm;
+    args.tree[1].children = [
+      {
+        id: "page:life/dormitory",
+        type: "page",
+        title: "宿舍指南",
+        parentId: "folder:life",
+        slug: "life/dormitory",
+      },
+      args.tree[1].children![0],
+    ];
+
+    const result = buildChanges(args);
+
+    expect(result.modified["content/docs/life/dormitory.md"]).toContain(
+      "order: 10",
+    );
+    expect(result.modified["content/docs/life/canteen.md"]).toContain(
+      "order: 20",
+    );
   });
 
   it("creates new pages and folders with slugified segments", () => {

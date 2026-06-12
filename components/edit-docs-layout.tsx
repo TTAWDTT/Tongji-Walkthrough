@@ -53,6 +53,15 @@ type MarkdownEditorProps = {
   onImageUploaded?: (filename: string) => void;
 };
 
+type InsertPosition = "before" | "after";
+
+type InsertTarget = {
+  id: string;
+  position: InsertPosition;
+};
+
+const FOLDER_INSERT_EDGE_RATIO = 0.2;
+
 const MarkdownEditor = dynamic<MarkdownEditorProps>(
   () => import("@/components/markdown-editor-client"),
   {
@@ -163,6 +172,90 @@ const appendNode = (
 
     return node;
   });
+};
+
+const insertNodeNear = (
+  nodes: EditNode[],
+  targetId: string,
+  position: InsertPosition,
+  nodeToInsert: EditNode,
+): EditNode[] => {
+  const targetIndex = nodes.findIndex((node) => node.id === targetId);
+
+  if (targetIndex >= 0) {
+    const target = nodes[targetIndex];
+    const insertIndex = position === "before" ? targetIndex : targetIndex + 1;
+    const nextNode = { ...nodeToInsert, parentId: target.parentId };
+
+    return [
+      ...nodes.slice(0, insertIndex),
+      nextNode,
+      ...nodes.slice(insertIndex),
+    ];
+  }
+
+  return nodes.map((node) =>
+    node.children
+      ? {
+          ...node,
+          children: insertNodeNear(
+            node.children,
+            targetId,
+            position,
+            nodeToInsert,
+          ),
+        }
+      : node,
+  );
+};
+
+const getListGapInsertTarget = (
+  listElement: HTMLUListElement,
+  clientY: number,
+  nodes: EditNode[],
+  parentFolderId: string | null,
+): InsertTarget | null => {
+  const rows = Array.from(listElement.children).flatMap((child, index) => {
+    if (!(child instanceof HTMLElement)) return [];
+    const shell = child.querySelector<HTMLElement>(
+      ":scope > .edit-tree-drag-shell",
+    );
+
+    if (!shell || !nodes[index]) return [];
+
+    return [{ node: nodes[index], rect: shell.getBoundingClientRect() }];
+  });
+
+  if (!rows.length) return null;
+
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+
+  if (clientY < first.rect.top) {
+    return { id: first.node.id, position: "before" };
+  }
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const current = rows[index];
+    const next = rows[index + 1];
+
+    if (clientY >= current.rect.top && clientY <= current.rect.bottom) {
+      return null;
+    }
+
+    if (next && clientY > current.rect.bottom && clientY < next.rect.top) {
+      return { id: current.node.id, position: "after" };
+    }
+  }
+
+  if (clientY > last.rect.bottom) {
+    return {
+      id: parentFolderId ?? last.node.id,
+      position: "after",
+    };
+  }
+
+  return null;
 };
 
 const updateNodeTitle = (
@@ -353,6 +446,7 @@ function DeleteIcon() {
 
 function EditTree({
   nodes,
+  parentFolderId,
   expandedIds,
   closingFolderIds,
   selectedPageId,
@@ -360,6 +454,7 @@ function EditTree({
   draggingId,
   dragHoverId,
   dropTargetId,
+  insertTarget,
   contents,
   frontmatters,
   onToggleFolder,
@@ -370,13 +465,16 @@ function EditTree({
   onDragStart,
   onDragEnd,
   onDragHoverNode,
+  onDragInsertNode,
   onDragLeaveNode,
   onDragEnterFolder,
   onDragOverFolder,
   onDragLeaveFolder,
   onDropOnFolder,
+  onDropNearNode,
 }: {
   nodes: EditNode[];
+  parentFolderId: string | null;
   expandedIds: Set<string>;
   closingFolderIds: Set<string>;
   selectedPageId: string | null;
@@ -384,6 +482,7 @@ function EditTree({
   draggingId: string | null;
   dragHoverId: string | null;
   dropTargetId: string | null;
+  insertTarget: InsertTarget | null;
   contents: Record<string, string>;
   frontmatters: Record<string, string>;
   onToggleFolder: (id: string) => void;
@@ -394,15 +493,48 @@ function EditTree({
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDragHoverNode: (id: string) => void;
+  onDragInsertNode: (target: InsertTarget) => void;
   onDragLeaveNode: (id: string) => void;
   onDragEnterFolder: (id: string) => void;
   onDragOverFolder: (id: string) => void;
   onDragLeaveFolder: (id: string) => void;
   onDropOnFolder: (id: string) => void;
+  onDropNearNode: (target: InsertTarget) => void;
 }) {
+  const getGapTarget = (event: DragEvent<HTMLUListElement>) =>
+    getListGapInsertTarget(
+      event.currentTarget,
+      event.clientY,
+      nodes,
+      parentFolderId,
+    );
+
   return (
-    <ul className="space-y-1">
-      {nodes.map((node) => {
+    <ul
+      className="space-y-1"
+      onDragOver={(event: DragEvent<HTMLUListElement>) => {
+        if (!draggingId) return;
+        const target = getGapTarget(event);
+
+        if (!target) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        onDragHoverNode(target.id);
+        onDragInsertNode(target);
+      }}
+      onDrop={(event: DragEvent<HTMLUListElement>) => {
+        if (!draggingId) return;
+        const target = getGapTarget(event);
+
+        if (!target) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        onDropNearNode(target);
+      }}
+    >
+      {nodes.map((node, index) => {
         const displayTitle =
           node.type === "page"
             ? (getFrontmatterTitle(frontmatters[node.id] ?? "") ??
@@ -417,6 +549,25 @@ function EditTree({
         const isDragging = draggingId === node.id;
         const isHoverTarget = dragHoverId === node.id;
         const isDropTarget = dropTargetId === node.id;
+        const insertPosition =
+          insertTarget?.id === node.id ? insertTarget.position : null;
+        const getSiblingInsertTarget = (
+          position: InsertPosition,
+        ): InsertTarget => {
+          if (position === "before" && index > 0) {
+            return { id: nodes[index - 1].id, position: "after" };
+          }
+
+          if (
+            position === "after" &&
+            index === nodes.length - 1 &&
+            parentFolderId
+          ) {
+            return { id: parentFolderId, position: "after" };
+          }
+
+          return { id: node.id, position };
+        };
         const activateNode = () => {
           if (isFolder) {
             onToggleFolder(node.id);
@@ -429,6 +580,7 @@ function EditTree({
           <li
             key={node.id}
             className={clsx(
+              "relative",
               shouldRenderChildren && "edit-tree-folder-zone",
               isFolder &&
                 isExpanded &&
@@ -494,23 +646,47 @@ function EditTree({
                 onDragLeaveFolder(node.id);
               }}
               onDragOver={(event: DragEvent<HTMLDivElement>) => {
-                onDragHoverNode(node.id);
-                if (!isFolder) return;
                 event.preventDefault();
                 event.stopPropagation();
-                onDragOverFolder(node.id);
+                const rect = event.currentTarget.getBoundingClientRect();
+                const offsetRatio = (event.clientY - rect.top) / rect.height;
+
+                if (
+                  isFolder &&
+                  offsetRatio >= FOLDER_INSERT_EDGE_RATIO &&
+                  offsetRatio <= 1 - FOLDER_INSERT_EDGE_RATIO
+                ) {
+                  onDragHoverNode(node.id);
+                  onDragOverFolder(node.id);
+
+                  return;
+                }
+
+                const target = getSiblingInsertTarget(
+                  offsetRatio < 0.5 ? "before" : "after",
+                );
+
+                onDragHoverNode(target.id);
+                onDragInsertNode(target);
               }}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
                 onDragStart(node.id);
               }}
               onDrop={(event: DragEvent<HTMLDivElement>) => {
-                if (!isFolder) return;
                 event.preventDefault();
                 event.stopPropagation();
-                onDropOnFolder(node.id);
+                if (insertTarget) {
+                  onDropNearNode(insertTarget);
+
+                  return;
+                }
+                if (isFolder) onDropOnFolder(node.id);
               }}
             >
+              {insertPosition === "before" ? (
+                <span className="edit-tree-insert-line edit-tree-insert-line-before" />
+              ) : null}
               <Button
                 fullWidth
                 className={clsx(
@@ -553,6 +729,10 @@ function EditTree({
               >
                 <DeleteIcon />
               </Button>
+              {insertPosition === "after" &&
+              !(isFolder && shouldRenderChildren) ? (
+                <span className="edit-tree-insert-line edit-tree-insert-line-after" />
+              ) : null}
             </div>
             {shouldRenderChildren ? (
               <div
@@ -567,17 +747,21 @@ function EditTree({
                   dropTargetId={dropTargetId}
                   expandedIds={expandedIds}
                   frontmatters={frontmatters}
+                  insertTarget={insertTarget}
                   nodes={node.children ?? []}
+                  parentFolderId={node.id}
                   renamingId={renamingId}
                   selectedPageId={selectedPageId}
                   onDeleteNode={onDeleteNode}
                   onDragEnd={onDragEnd}
                   onDragEnterFolder={onDragEnterFolder}
                   onDragHoverNode={onDragHoverNode}
+                  onDragInsertNode={onDragInsertNode}
                   onDragLeaveFolder={onDragLeaveFolder}
                   onDragLeaveNode={onDragLeaveNode}
                   onDragOverFolder={onDragOverFolder}
                   onDragStart={onDragStart}
+                  onDropNearNode={onDropNearNode}
                   onDropOnFolder={onDropOnFolder}
                   onRenameCommit={onRenameCommit}
                   onRenameStart={onRenameStart}
@@ -585,6 +769,9 @@ function EditTree({
                   onToggleFolder={onToggleFolder}
                 />
               </div>
+            ) : null}
+            {insertPosition === "after" && isFolder && shouldRenderChildren ? (
+              <span className="edit-tree-insert-line edit-tree-insert-line-after" />
             ) : null}
           </li>
         );
@@ -681,6 +868,7 @@ export function EditDocsLayout({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragHoverId, setDragHoverId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [insertTarget, setInsertTarget] = useState<InsertTarget | null>(null);
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [profile, setProfile] = useState<Profile>(defaultProfile);
@@ -1202,6 +1390,7 @@ export function EditDocsLayout({
     setDraggingId(null);
     setDragHoverId(null);
     setDropTargetId(null);
+    setInsertTarget(null);
   };
 
   const addFolder = () => {
@@ -1264,6 +1453,36 @@ export function EditDocsLayout({
       return appendNode(withoutDragged, targetFolderId, draggedNode);
     });
     clearDragState(targetFolderId);
+  };
+
+  const moveNodeNear = (target: InsertTarget) => {
+    if (!draggingId || draggingId === target.id) {
+      clearDragState();
+
+      return;
+    }
+    if (isDescendant(tree, draggingId, target.id)) {
+      clearDragState();
+
+      return;
+    }
+
+    setTree((nodes) => {
+      const [withoutDragged, draggedNode] = removeNode(
+        cloneNodes(nodes),
+        draggingId,
+      );
+
+      if (!draggedNode) return nodes;
+
+      return insertNodeNear(
+        withoutDragged,
+        target.id,
+        target.position,
+        draggedNode,
+      );
+    });
+    clearDragState();
   };
 
   const validateProfile = (): boolean => {
@@ -1447,7 +1666,11 @@ export function EditDocsLayout({
             </div>
             <div
               className="min-h-[calc(100vh-8rem)]"
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDropTargetId(null);
+                setInsertTarget(null);
+              }}
               onDrop={(event) => {
                 event.preventDefault();
                 moveNode(null);
@@ -1461,7 +1684,9 @@ export function EditDocsLayout({
                 dropTargetId={dropTargetId}
                 expandedIds={expandedIds}
                 frontmatters={frontmatters}
+                insertTarget={insertTarget}
                 nodes={tree}
+                parentFolderId={null}
                 renamingId={renamingId}
                 selectedPageId={selectedPageId}
                 onDeleteNode={deleteNode}
@@ -1469,9 +1694,15 @@ export function EditDocsLayout({
                 onDragEnterFolder={(id) => {
                   setDragHoverId(id);
                   setDropTargetId(id);
+                  setInsertTarget(null);
                   scheduleAutoExpand(id);
                 }}
                 onDragHoverNode={setDragHoverId}
+                onDragInsertNode={(target) => {
+                  clearHoverTimer();
+                  setDropTargetId(null);
+                  setInsertTarget(target);
+                }}
                 onDragLeaveFolder={(id) => {
                   clearHoverTimer();
                   setDropTargetId((current) =>
@@ -1483,15 +1714,21 @@ export function EditDocsLayout({
                   setDragHoverId((current) =>
                     current === id ? null : current,
                   );
+                  setInsertTarget((current) =>
+                    current?.id === id ? null : current,
+                  );
                 }}
                 onDragOverFolder={(id) => {
                   setDropTargetId(id);
+                  setInsertTarget(null);
                   scheduleAutoExpand(id);
                 }}
                 onDragStart={(id) => {
                   setDraggingId(id);
                   setDragHoverId(null);
+                  setInsertTarget(null);
                 }}
+                onDropNearNode={moveNodeNear}
                 onDropOnFolder={(id) => moveNode(id)}
                 onRenameCommit={(id, value) => {
                   const title = value.trim() || "Untitled";
