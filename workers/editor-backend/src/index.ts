@@ -207,7 +207,7 @@ app.get("/api/content", async (c) => {
   const ref = c.req.query("ref") || c.env.GITHUB_BRANCH;
 
   if (!path) return c.json({ success: false, error: "Missing path" }, 400);
-  if (path.includes("..")) {
+  if (!isValidDocPath(path)) {
     return c.json({ success: false, error: "Invalid path" }, 400);
   }
   try {
