@@ -368,7 +368,12 @@ html {
 .edit-tree-children[data-expanded="true"] {
     grid-template-rows: 1fr;
     opacity: 1;
+    overflow: visible;
     transform: translateY(0);
+}
+
+.edit-tree-children[data-expanded="true"] > ul {
+    overflow: visible;
 }
 
 .edit-tree-children[data-expanded="false"] {

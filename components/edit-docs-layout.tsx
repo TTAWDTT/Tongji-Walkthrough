@@ -61,6 +61,7 @@ type InsertTarget = {
 };
 
 const FOLDER_INSERT_EDGE_RATIO = 0.2;
+const TREE_LEVEL_INDENT_PX = 24;
 
 const MarkdownEditor = dynamic<MarkdownEditorProps>(
   () => import("@/components/markdown-editor-client"),
@@ -209,11 +210,48 @@ const insertNodeNear = (
   );
 };
 
+const visibleTailPath = (
+  node: EditNode,
+  expandedIds: Set<string>,
+): EditNode[] => {
+  const path = [node];
+  let current = node;
+
+  while (
+    current.type === "folder" &&
+    expandedIds.has(current.id) &&
+    current.children?.length
+  ) {
+    current = current.children[current.children.length - 1];
+    path.push(current);
+  }
+
+  return path;
+};
+
+const tailInsertTarget = (
+  node: EditNode,
+  expandedIds: Set<string>,
+  clientX: number,
+  rowLeft: number,
+): InsertTarget => {
+  const path = visibleTailPath(node, expandedIds);
+  const requestedDepth = Math.max(
+    0,
+    Math.floor((clientX - rowLeft) / TREE_LEVEL_INDENT_PX),
+  );
+  const target = path[Math.min(requestedDepth, path.length - 1)];
+
+  return { id: target.id, position: "after" };
+};
+
 const getListGapInsertTarget = (
   listElement: HTMLUListElement,
   clientY: number,
+  clientX: number,
   nodes: EditNode[],
   parentFolderId: string | null,
+  expandedIds: Set<string>,
 ): InsertTarget | null => {
   const rows = Array.from(listElement.children).flatMap((child, index) => {
     if (!(child instanceof HTMLElement)) return [];
@@ -244,15 +282,28 @@ const getListGapInsertTarget = (
     }
 
     if (next && clientY > current.rect.bottom && clientY < next.rect.top) {
-      return { id: current.node.id, position: "after" };
+      const gapMiddle =
+        current.rect.bottom + (next.rect.top - current.rect.bottom) / 2;
+
+      if (clientY >= gapMiddle) {
+        return { id: current.node.id, position: "after" };
+      }
+
+      return tailInsertTarget(
+        current.node,
+        expandedIds,
+        clientX,
+        current.rect.left,
+      );
     }
   }
 
   if (clientY > last.rect.bottom) {
-    return {
-      id: parentFolderId ?? last.node.id,
-      position: "after",
-    };
+    if (parentFolderId && clientX < last.rect.left + TREE_LEVEL_INDENT_PX) {
+      return { id: parentFolderId, position: "after" };
+    }
+
+    return tailInsertTarget(last.node, expandedIds, clientX, last.rect.left);
   }
 
   return null;
@@ -505,8 +556,10 @@ function EditTree({
     getListGapInsertTarget(
       event.currentTarget,
       event.clientY,
+      event.clientX,
       nodes,
       parentFolderId,
+      expandedIds,
     );
 
   return (
@@ -556,14 +609,6 @@ function EditTree({
         ): InsertTarget => {
           if (position === "before" && index > 0) {
             return { id: nodes[index - 1].id, position: "after" };
-          }
-
-          if (
-            position === "after" &&
-            index === nodes.length - 1 &&
-            parentFolderId
-          ) {
-            return { id: parentFolderId, position: "after" };
           }
 
           return { id: node.id, position };
