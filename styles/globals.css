@@ -695,6 +695,15 @@ html {
     text-underline-offset: 4px;
 }
 
+.docs-markdown img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.25rem 0;
+    border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
+    border-radius: 0.5rem;
+}
+
 .docs-markdown code {
     border-radius: 0.25rem;
     background: color-mix(in oklch, var(--foreground) 8%, transparent);

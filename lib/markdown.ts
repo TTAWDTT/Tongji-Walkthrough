@@ -6,8 +6,74 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const isSafeImageSrc = (src: string) =>
+  /^(https?:\/\/|\/(?!\/)|\.{0,2}\/)/i.test(src) &&
+  !/[\u0000-\u001f]/.test(src);
+
+const readHtmlAttributes = (source: string): Record<string, string> => {
+  const attributes: Record<string, string> = {};
+  const attributePattern =
+    /\s([a-zA-Z][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = attributePattern.exec(source))) {
+    attributes[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? "";
+  }
+
+  return attributes;
+};
+
+const renderImage = ({
+  alt = "",
+  height,
+  src,
+  width,
+}: {
+  alt?: string;
+  height?: string;
+  src: string;
+  width?: string;
+}) => {
+  const trimmedSrc = src.trim();
+
+  if (!isSafeImageSrc(trimmedSrc)) return escapeHtml(src);
+
+  const sizeAttributes = [
+    width && /^\d{1,5}$/.test(width) ? ` width="${width}"` : "",
+    height && /^\d{1,5}$/.test(height) ? ` height="${height}"` : "",
+  ].join("");
+
+  return `<img src="${escapeHtml(trimmedSrc)}" alt="${escapeHtml(alt)}"${sizeAttributes} loading="lazy" />`;
+};
+
+const renderHtmlImage = (source: string) => {
+  if (!/^<img\b[^>]*\/?>$/i.test(source.trim())) return null;
+  const attributes = readHtmlAttributes(source);
+
+  if (!attributes.src) return escapeHtml(source);
+
+  return renderImage({
+    alt: attributes.alt,
+    height: attributes.height,
+    src: attributes.src,
+    width: attributes.width,
+  });
+};
+
+const renderMarkdownImage = (source: string) => {
+  const match = source.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/);
+
+  if (!match) return null;
+
+  return renderImage({ alt: match[1], src: match[2] });
+};
+
 const renderInline = (value: string) =>
   escapeHtml(value)
+    .replace(
+      /!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g,
+      (_, alt, src) => renderImage({ alt, src }),
+    )
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
@@ -52,6 +118,16 @@ export const markdownToHtml = (markdown: string) => {
 
     if (!line.trim()) {
       flushList();
+
+      continue;
+    }
+
+    const blockImage =
+      renderHtmlImage(line.trim()) ?? renderMarkdownImage(line.trim());
+
+    if (blockImage) {
+      flushList();
+      html.push(blockImage);
 
       continue;
     }
