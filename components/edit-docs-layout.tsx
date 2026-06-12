@@ -1688,7 +1688,7 @@ export function EditDocsLayout({
       )}
       <main className="grid min-h-[calc(100vh-4rem)] lg:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="docs-sidebar-shell lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start">
-          <div className="docs-sidebar h-full overflow-y-auto border-r border-separator bg-background/80 p-3 backdrop-blur-md">
+          <div className="docs-sidebar flex h-full min-h-0 flex-col border-r border-separator bg-background/80 p-3 backdrop-blur-md">
             <div className="mb-3 flex items-center justify-end gap-1">
               <Button
                 isIconOnly
@@ -1710,7 +1710,7 @@ export function EditDocsLayout({
               </Button>
             </div>
             <div
-              className="min-h-[calc(100vh-8rem)]"
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto"
               onDragOver={(event) => {
                 event.preventDefault();
                 setDropTargetId(null);

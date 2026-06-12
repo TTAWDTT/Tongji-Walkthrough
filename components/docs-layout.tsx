@@ -225,7 +225,7 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
       <aside className="docs-sidebar-shell lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start">
         <div
           className={clsx(
-            "docs-sidebar h-full border-r border-separator bg-background/80 p-3 backdrop-blur-md",
+            "docs-sidebar flex h-full min-h-0 flex-col border-r border-separator bg-background/80 p-3 backdrop-blur-md",
             isSidebarCollapsed && "lg:px-2",
           )}
         >
@@ -251,7 +251,7 @@ export function DocsLayout({ doc }: { doc: DocPageData }) {
             </Button>
           </div>
 
-          <nav className="overflow-x-auto lg:overflow-visible">
+          <nav className="min-h-0 flex-1 overscroll-contain overflow-x-auto overflow-y-auto lg:overflow-x-visible">
             <DocsNavTree
               activeSlug={doc.slug}
               expandedIds={expandedIds}
